@@ -134,9 +134,9 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Product Image Container - 16:9 ratio */}
+      {/* Product Image Container - 9:16 ratio, sharp corners */}
       <Link to={`/products/${product.slug}`} className="block">
-        <div className="relative overflow-hidden rounded-xl aspect-[16/9] bg-gray-100 border-2 border-gray-200 group-hover:border-black transition-all duration-300">
+        <div className="relative overflow-hidden aspect-[9/16] bg-gray-100 border border-gray-200 group-hover:border-black transition-all duration-300">
           {/* Product Image */}
           <motion.img
             src={images[currentImageIndex]}
@@ -145,56 +145,65 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             initial={false}
             animate={{
               scale: isHovered ? 1.1 : 1,
-              borderRadius: isHovered ? '30% 30% 30% 30% / 30% 30% 30% 30%' : '0%',
             }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           />
 
-          {/* Badge with zoom effect */}
-          {(product.isNew || product.salePrice || product.badge) && (
+          {/* Badge with pulse/zoom animation - Top Right */}
+          {(product.is_new_arrival || product.badge || (product.compare_at_price && parseFloat(product.compare_at_price) > parseFloat(product.base_price))) && (
             <motion.div
-              className="absolute top-3 left-3"
+              className="absolute top-3 right-3"
               animate={{
-                scale: isHovered ? [1, 1.2, 1] : 1,
+                scale: [1, 1.1, 1],
               }}
               transition={{
-                duration: 0.6,
-                repeat: isHovered ? Infinity : 0,
+                duration: 1.5,
+                repeat: Infinity,
                 repeatDelay: 0.5,
               }}
             >
-              {product.isNew && (
-                <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 rounded-full">
+              {product.is_new_arrival && (
+                <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 rounded-none">
                   NEW
                 </span>
               )}
-              {product.salePrice && !product.isNew && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full">
-                  SALE
+              {product.badge && !product.is_new_arrival && (
+                <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 rounded-none">
+                  {product.badge}
                 </span>
               )}
-              {product.badge && !product.isNew && !product.salePrice && (
-                <span className="bg-purple-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full">
-                  {product.badge}
+              {!product.is_new_arrival && !product.badge && product.compare_at_price && parseFloat(product.compare_at_price) > parseFloat(product.base_price) && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-none">
+                  -{Math.round((1 - parseFloat(product.base_price) / parseFloat(product.compare_at_price)) * 100)}%
                 </span>
               )}
             </motion.div>
           )}
 
-          {/* Quick View Icon - Top Right */}
+          {/* Quick View Icon - Top Right, expands on hover */}
           <motion.button
             onClick={handleQuickView}
-            className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-lg hover:bg-black hover:text-white transition-colors"
-            initial={{ opacity: 0, scale: 0.8 }}
+            className="absolute top-3 right-3 p-3 bg-white shadow-lg flex items-center gap-2 overflow-hidden"
+            initial={{ opacity: 0, x: 20 }}
             animate={{ 
               opacity: isHovered ? 1 : 0,
-              scale: isHovered ? 1 : 0.8,
+              x: isHovered ? 0 : 20,
             }}
             transition={{ duration: 0.3 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
             <Eye size={18} />
+            <motion.span
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ 
+                width: isHovered ? 'auto' : 0,
+                opacity: isHovered ? 1 : 0,
+              }}
+              className="text-sm font-medium whitespace-nowrap"
+            >
+              Quick View
+            </motion.span>
           </motion.button>
 
           {/* Image Navigation Arrows */}
@@ -241,7 +250,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
 
           {/* Size Selector - Slides up from bottom */}
           <AnimatePresence>
-            {showSizeSelector && product.sizes && product.sizes.length > 0 && (
+            {showSizeSelector && product.attributes?.sizes && product.attributes.sizes.length > 0 && (
               <motion.div
                 initial={{ y: 100, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -252,7 +261,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
               >
                 <p className="text-xs font-medium mb-2 text-center">Select Size</p>
                 <div className="flex gap-2 justify-center flex-wrap">
-                  {product.sizes.map((size: string) => (
+                  {product.attributes.sizes.map((size: string) => (
                     <button
                       key={size}
                       onClick={(e) => {
@@ -260,7 +269,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                         e.stopPropagation();
                         setSelectedSize(size);
                       }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      className={`px-3 py-1.5 text-xs font-medium rounded-none border-2 transition-all ${
                         selectedSize === size
                           ? 'border-black bg-black text-white'
                           : 'border-gray-300 hover:border-black'
@@ -274,22 +283,50 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             )}
           </AnimatePresence>
 
-          {/* Add to Cart Button - Appears on hover */}
+          {/* Quantity Selector and Add to Cart - Appear on hover */}
           <AnimatePresence>
             {isHovered && selectedSize && (
-              <motion.button
-                onClick={handleAddToCart}
+              <motion.div
                 initial={{ y: 100, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 100, opacity: 0 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
-                className="absolute bottom-3 left-3 right-3 bg-black text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-lg"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                className="absolute bottom-0 left-0 right-0 bg-white/98 backdrop-blur-sm p-3 border-t"
               >
-                <ShoppingBag size={16} />
-                Add to Cart
-              </motion.button>
+                <div className="flex gap-2 mb-2">
+                  <span className="text-xs font-medium py-2">Qty:</span>
+                  <div className="flex items-center border border-gray-300">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className="px-2 py-1 hover:bg-gray-100"
+                    >
+                      -
+                    </button>
+                    <span className="px-3 py-1 text-sm">1</span>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      className="px-2 py-1 hover:bg-gray-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <motion.button
+                  onClick={handleAddToCart}
+                  className="w-full bg-black text-white py-2.5 rounded-none font-medium text-sm flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-lg"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <ShoppingBag size={16} />
+                  Add to Cart
+                </motion.button>
+              </motion.div>
             )}
           </AnimatePresence>
         </div>
@@ -303,18 +340,12 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
           </h3>
         </Link>
         <div className="flex items-center gap-2 mt-1.5">
-          {product.salePrice ? (
-            <>
-              <span className="text-sm font-bold text-black">
-                Rs.{product.salePrice.toLocaleString()}
-              </span>
-              <span className="text-xs text-gray-400 line-through">
-                Rs.{product.price?.toLocaleString()}
-              </span>
-            </>
-          ) : (
-            <span className="text-sm font-bold text-black">
-              Rs.{product.price?.toLocaleString()}
+          <span className="text-sm font-bold text-black">
+            Rs.{parseFloat(product.base_price || 0).toLocaleString()}
+          </span>
+          {product.compare_at_price && parseFloat(product.compare_at_price) > parseFloat(product.base_price || 0) && (
+            <span className="text-xs text-gray-400 line-through">
+              Rs.{parseFloat(product.compare_at_price).toLocaleString()}
             </span>
           )}
         </div>
