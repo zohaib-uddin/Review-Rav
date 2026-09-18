@@ -145,7 +145,9 @@ app.get('/api/products', async (req, res) => {
     const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
     
     const transformedProducts = products.map((p: any) => {
-      const category = categoryMap.get(p.category_id);
+      // Use main_category_id and sub_category_id (active columns)
+      const mainCategory = categoryMap.get(p.main_category_id);
+      const subCategory = categoryMap.get(p.sub_category_id);
       
       let images = [];
       try {
@@ -169,9 +171,12 @@ app.get('/api/products', async (req, res) => {
         base_price: parseFloat(p.base_price) || 0,
         compare_at_price: p.compare_at_price ? parseFloat(p.compare_at_price) : null,
         is_active: p.is_active,
-        category_id: p.category_id,
-        category_slug: category?.slug || 'uncategorized',
-        category_name: category?.name || 'Uncategorized',
+        main_category_id: p.main_main_category_id, sub_category_id,
+        sub_category_id: p.sub_main_category_id, sub_category_id,
+        main_category_slug: mainCategory?.slug || 'uncategorized',
+        main_category_name: mainCategory?.name || 'Uncategorized',
+        sub_category_slug: subCategory?.slug || null,
+        sub_category_name: subCategory?.name || null,
         brand: p.brand || 'RAVENZA',
         fabric: p.fabric || null,
         fit: p.fit || null,
@@ -214,7 +219,7 @@ app.get('/api/products', async (req, res) => {
           'Made in Pakistan'
         ].filter(Boolean),
         material: p.fabric_composition || p.fabric || 'Premium Cotton',
-        category: category?.slug || 'uncategorized'
+        category: mainCategory?.slug || 'uncategorized'
       };
     });
     
@@ -255,13 +260,13 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
     const product = req.body;
     const result = await sql`
       INSERT INTO products (
-        name, slug, description, base_price, compare_at_price, category_id,
+        name, slug, description, base_price, compare_at_price, main_category_id, sub_category_id,
         fabric, fit, sku, is_new_arrival, is_bestseller, is_featured,
         badge, images, image_url, attributes, fabric_composition, graphic_print,
         garment_specs, status, is_active
       ) VALUES (
         ${product.name}, ${product.slug}, ${product.description}, ${product.base_price},
-        ${product.compare_at_price}, ${product.category_id}, ${product.fabric}, ${product.fit},
+        ${product.compare_at_price}, ${product.main_category_id}, ${product.sub_category_id}, ${product.fabric}, ${product.fit},
         ${product.sku}, ${product.is_new_arrival}, ${product.is_bestseller},
         ${product.is_featured}, ${product.badge},
         ${JSON.stringify(product.images)}, ${product.image_url},
@@ -290,7 +295,8 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
         description = ${product.description},
         base_price = ${product.base_price},
         compare_at_price = ${product.compare_at_price},
-        category_id = ${product.category_id},
+        main_category_id = ${product.main_category_id},
+        sub_category_id = ${product.sub_category_id},
         fabric = ${product.fabric},
         fit = ${product.fit},
         sku = ${product.sku},

@@ -14,6 +14,7 @@ export default function AdminCategories() {
     badge: '',
     tag: '',
     cover_image_url: '',
+    banner_image: '',
     parent_id: null as string | null,
     sort_order: 0,
   });
@@ -227,6 +228,17 @@ export default function AdminCategories() {
                   onChange={e => setFormData({ ...formData, cover_image_url: e.target.value })}
                   className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Banner Image (for Mega Menu)</label>
+                <input
+                  type="url"
+                  value={formData.banner_image || ''}
+                  onChange={e => setFormData({ ...formData, banner_image: e.target.value })}
+                  placeholder="https://example.com/banner.jpg"
+                  className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black"
+                />
+                <p className="text-xs text-gray-500 mt-1">This image will appear in the right column of the mega menu</p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">Parent Category</label>
