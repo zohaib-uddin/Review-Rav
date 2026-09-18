@@ -17,6 +17,8 @@ export default function AdminCategories() {
     banner_image: '',
     parent_id: null as string | null,
     sort_order: 0,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
   });
 
   useEffect(() => {
@@ -38,6 +40,8 @@ export default function AdminCategories() {
       cover_image_url: '',
       parent_id: null,
       sort_order: 0,
+      is_featured_in_focus: false,
+      display_order_in_focus: 0,
     });
   };
 
@@ -50,8 +54,11 @@ export default function AdminCategories() {
       badge: category.badge || '',
       tag: category.tag || '',
       cover_image_url: category.cover_image_url || '',
+      banner_image: category.banner_image || '',
       parent_id: category.parent_id,
       sort_order: category.sort_order,
+      is_featured_in_focus: category.is_featured_in_focus || false,
+      display_order_in_focus: category.display_order_in_focus || 0,
     });
     setShowForm(true);
   };
@@ -262,6 +269,37 @@ export default function AdminCategories() {
                   className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black"
                 />
               </div>
+              
+              {/* Collections in Focus Section */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-bold mb-3">Collections in Focus Settings</h4>
+                <div className="flex items-center gap-3 mb-4">
+                  <input
+                    type="checkbox"
+                    id="is_featured_in_focus"
+                    checked={formData.is_featured_in_focus}
+                    onChange={e => setFormData({ ...formData, is_featured_in_focus: e.target.checked })}
+                    className="w-5 h-5 rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <label htmlFor="is_featured_in_focus" className="text-sm font-medium">
+                    Feature in "Collections in Focus" section
+                  </label>
+                </div>
+                {formData.is_featured_in_focus && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Display Order in Focus</label>
+                    <input
+                      type="number"
+                      value={formData.display_order_in_focus}
+                      onChange={e => setFormData({ ...formData, display_order_in_focus: Number(e.target.value) })}
+                      className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black"
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Lower numbers appear first. Maximum 4 categories allowed in this section.</p>
+                  </div>
+                )}
+              </div>
+              
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
