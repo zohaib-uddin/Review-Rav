@@ -250,12 +250,15 @@ export default function ProductDetail() {
               <div className="mt-6">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="font-bold text-sm">SIZE</h4>
-                  <button 
-                    onClick={() => setShowSizeGuide(true)}
-                    className="text-xs text-gray-500 underline hover:text-black"
-                  >
-                    Size Guide
-                  </button>
+                  {/* Only show Size Guide button if product has size guide enabled */}
+                  {product.size_guide?.enabled && product.size_guide?.categories && (
+                    <button
+                      onClick={() => setShowSizeGuide(true)}
+                      className="text-xs text-gray-500 underline hover:text-black"
+                    >
+                      Size Guide
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {product.sizes?.map(size => (
