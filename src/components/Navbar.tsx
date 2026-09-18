@@ -17,6 +17,9 @@ export default function Navbar() {
   const user = useStore(state => state.user);
   const categories = useStore(state => state.categories);
   const fetchCategories = useStore(state => state.fetchCategories);
+  const isCartSidebarOpen = useStore(state => state.isCartSidebarOpen);
+  const toggleCartSidebar = useStore(state => state.toggleCartSidebar);
+  const animateHeaderIcon = useStore(state => state.animateHeaderIcon);
   const navigate = useNavigate();
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -108,12 +111,25 @@ export default function Navbar() {
                 )}
               </Link>
 
-              <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors relative">
-                <ShoppingBag size={20} />
+              <Link 
+                to="/cart" 
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors relative"
+                onClick={(e) => {
+                  e.preventDefault();
+                  toggleCartSidebar();
+                }}
+              >
+                <motion.div
+                  animate={animateHeaderIcon ? { rotate: [0, -10, 10, -10, 0], scale: [1, 1.2, 1] } : {}}
+                  transition={{ duration: 0.4 }}
+                >
+                  <ShoppingBag size={20} />
+                </motion.div>
                 {cartCount > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
+                    animate={{ scale: animateHeaderIcon ? [1, 1.4, 1] : 1 }}
+                    transition={{ duration: 0.3 }}
                     className="absolute -top-0.5 -right-0.5 bg-black text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold"
                   >
                     {cartCount}

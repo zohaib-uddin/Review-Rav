@@ -9,6 +9,7 @@ import AccessibilityWrapper from './components/AccessibilityWrapper';
 import { ErrorBoundary, Loading } from './components/PerformanceOptimization';
 import { ScrollToTop, CookieConsent } from './components/FinalPolish';
 import { registerServiceWorker, generateManifest } from './pwa';
+import CartSidebar from './components/CartSidebar';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
 import CollectionPage from './pages/CollectionPage';
@@ -42,6 +43,7 @@ function App() {
         <div className="min-h-screen bg-white flex flex-col">
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <Navbar />
+          <CartSidebar />
           <AccessibilityWrapper>
             <Suspense fallback={<Loading />}>
               <Routes>
