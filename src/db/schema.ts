@@ -10,6 +10,7 @@ export const categories = pgTable('categories', {
   description: text('description'),
   badge: varchar('badge', { length: 50 }),
   cover_image_url: varchar('cover_image_url', { length: 500 }),
+  banner_image: varchar('banner_image', { length: 500 }), // NEW: For mega menu right column
   tag: varchar('tag', { length: 100 }),
   sort_order: integer('sort_order').notNull().default(0),
   is_active: boolean('is_active').notNull().default(true),
@@ -34,8 +35,9 @@ export const products = pgTable('products', {
   base_price: numeric('base_price', { precision: 10, scale: 2 }).notNull(),
   compare_at_price: numeric('compare_at_price', { precision: 10, scale: 2 }),
   is_active: boolean('is_active').notNull().default(true),
-  category_id: uuid('category_id'),
-  subcategory_id: uuid('subcategory_id'),
+  // Category relationships - using main_category_id and sub_category_id (active columns)
+  main_category_id: uuid('main_category_id'),
+  sub_category_id: uuid('sub_category_id'),
   brand: varchar('brand', { length: 100 }).default('RAVENZA'),
   sku: varchar('sku', { length: 100 }),
   cost_price: numeric('cost_price', { precision: 10, scale: 2 }),
@@ -87,8 +89,8 @@ export const products = pgTable('products', {
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   slugIdx: uniqueIndex('products_slug_idx').on(table.slug),
-  categoryIdx: index('products_category_idx').on(table.category_id),
-  subcategoryIdx: index('products_subcategory_idx').on(table.subcategory_id),
+  mainCategoryIdx: index('products_main_category_idx').on(table.main_category_id),
+  subCategoryIdx: index('products_sub_category_idx').on(table.sub_category_id),
   activeIdx: index('products_active_idx').on(table.is_active),
   newArrivalIdx: index('products_new_arrival_idx').on(table.is_new_arrival),
   bestSellerIdx: index('products_best_seller_idx').on(table.is_best_seller),
@@ -97,15 +99,15 @@ export const products = pgTable('products', {
 }));
 
 export const productsRelations = relations(products, ({ one, many }) => ({
-  category: one(categories, {
-    fields: [products.category_id],
+  mainCategory: one(categories, {
+    fields: [products.main_category_id],
     references: [categories.id],
-    relationName: 'product_category',
+    relationName: 'product_main_category',
   }),
-  subcategory: one(categories, {
-    fields: [products.subcategory_id],
+  subCategory: one(categories, {
+    fields: [products.sub_category_id],
     references: [categories.id],
-    relationName: 'product_subcategory',
+    relationName: 'product_sub_category',
   }),
   reviews: many(reviews),
   orderItems: many(orderItems),
