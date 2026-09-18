@@ -4,9 +4,13 @@ import { ArrowRight } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
 export default function CollectionsInFocus() {
-  const { products } = useStore();
-
-  const featuredProducts = products.filter(p => p.is_featured).slice(0, 4);
+  const { categories } = useStore();
+  
+  // Get categories featured in "Collections in Focus", sorted by display_order_in_focus, max 4
+  const featuredCategories = categories
+    .filter((c: any) => c.is_featured_in_focus && c.is_active)
+    .sort((a: any, b: any) => (a.display_order_in_focus || 0) - (b.display_order_in_focus || 0))
+    .slice(0, 4);
 
   return (
     <section className="py-16 bg-gray-50">
@@ -25,6 +29,7 @@ export default function CollectionsInFocus() {
         </motion.div>
 
         <div className="grid md:grid-cols-2 gap-8">
+          {/* Left Side - Static Content */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -33,18 +38,18 @@ export default function CollectionsInFocus() {
           >
             <img
               src="https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop"
-              alt="Winter Essentials"
+              alt="Featured Collection"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 p-8">
-              <p className="text-white/70 text-sm tracking-widest mb-2">WINTER ESSENTIALS</p>
-              <h3 className="text-3xl font-bold text-white mb-3">Co-Ord Sets</h3>
+              <p className="text-white/70 text-sm tracking-widest mb-2">FEATURED COLLECTION</p>
+              <h3 className="text-3xl font-bold text-white mb-3">Premium Styles</h3>
               <p className="text-white/80 text-sm mb-4">
-                Premium matching sets for effortless style
+                Discover our handpicked selection of premium fashion pieces designed for the modern individual.
               </p>
               <Link
-                to="/shop/co-ord-sets"
+                to="/shop"
                 className="inline-flex items-center gap-2 text-white font-medium hover:gap-3 transition-all"
               >
                 Shop Now <ArrowRight size={16} />
@@ -52,34 +57,60 @@ export default function CollectionsInFocus() {
             </div>
           </motion.div>
 
+          {/* Right Side - Dynamic Category Cards (2x2 Grid) */}
           <div className="grid grid-cols-2 gap-4">
-            {featuredProducts.map((product, i) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <Link to={`/product/${product.id}`} className="group block">
-                  <div className="aspect-square rounded-xl overflow-hidden bg-gray-200">
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  </div>
-                  <div className="mt-3">
-                    <h4 className="text-sm font-medium line-clamp-1 group-hover:text-purple-600 transition-colors">
-                      {product.name}
-                    </h4>
-                    <p className="text-sm font-bold mt-1">
-                      Rs.{(product.salePrice || product.price || 0).toLocaleString()}
-                    </p>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+            {featuredCategories.length > 0 ? (
+              featuredCategories.map((category: any, i: number) => (
+                <motion.div
+                  key={category.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <Link to={`/collections/${category.slug}`} className="group block h-full">
+                    <div className="aspect-square rounded-xl overflow-hidden bg-gray-200 h-full flex flex-col">
+                      {category.cover_image_url ? (
+                        <img
+                          src={category.cover_image_url}
+                          alt={category.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                          <span className="text-gray-400 text-xs">No Image</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 flex flex-col h-[calc(100%-theme(spacing.3))]">
+                      <h4 className="text-sm font-medium line-clamp-2 group-hover:text-purple-600 transition-colors">
+                        {category.name}
+                      </h4>
+                      {category.description && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                          {category.description}
+                        </p>
+                      )}
+                      <button className="mt-2 text-xs font-semibold text-black uppercase tracking-wide group-hover:text-purple-600 transition-colors text-left">
+                        Shop {category.name}
+                      </button>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))
+            ) : (
+              // Placeholder cards when no categories are featured
+              Array.from({ length: 4 }).map((_, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="aspect-square rounded-xl bg-gray-200 animate-pulse"
+                />
+              ))
+            )}
           </div>
         </div>
       </div>

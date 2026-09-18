@@ -14,6 +14,9 @@ export const categories = pgTable('categories', {
   tag: varchar('tag', { length: 100 }),
   sort_order: integer('sort_order').notNull().default(0),
   is_active: boolean('is_active').notNull().default(true),
+  // Collections in Focus fields
+  is_featured_in_focus: boolean('is_featured_in_focus').notNull().default(false),
+  display_order_in_focus: integer('display_order_in_focus').notNull().default(0),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -21,6 +24,7 @@ export const categories = pgTable('categories', {
   parentIdx: index('categories_parent_idx').on(table.parent_id),
   activeIdx: index('categories_active_idx').on(table.is_active),
   sortIdx: index('categories_sort_idx').on(table.sort_order),
+  featuredInFocusIdx: index('categories_featured_in_focus_idx').on(table.is_featured_in_focus),
 }));
 
 // Categories relations - simplified to avoid self-reference issues
