@@ -57,6 +57,7 @@ export default function AdminPanel() {
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
     { id: 'categories', label: 'Categories', icon: Box },
     { id: 'collections', label: 'Collections', icon: Package },
+    { id: 'warm-chapters', label: 'Warm Chapters', icon: BookOpen },
     { id: 'reviews', label: 'Reviews', icon: Star },
     { id: 'faqs', label: 'FAQs', icon: MessageSquare },
     { id: 'journal', label: 'Journal', icon: BookOpen },

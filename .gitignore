@@ -1,8 +1,8 @@
-```gitignore
+```
 # Dependencies
 node_modules/
 
-# Build outputs
+# Build artifacts
 dist/
 build/
 target/
@@ -12,45 +12,47 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py.class
+*.py.obj
 .Python
 env/
 venv/
 .venv/
 .ENV
-.python-version
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Logs
 *.log
 
-# Environment variables
-.env
-.env.local
-.env.*
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+*.coverage
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# MyPy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pytest
+# Testing
 .pytest_cache/
+.mypy_cache/
+.nyc_output/
+coverage/
 
-# Compressed
+# Compressed files
 *.zip
 *.gz
 *.tar

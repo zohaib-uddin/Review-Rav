@@ -374,6 +374,75 @@ app.get('/api/warm-chapters', async (req, res) => {
   }
 });
 
+// Admin-only routes for warm chapters management
+app.post('/api/warm-chapters', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { title, subtitle, slug, image_url, product_ids, display_order, is_active } = req.body;
+    
+    if (!title || !slug || !image_url) {
+      return res.status(400).json({ message: 'Title, slug, and image_url are required' });
+    }
+    
+    const newChapter = await sql`
+      INSERT INTO warm_chapters (title, subtitle, slug, image_url, product_ids, display_order, is_active)
+      VALUES (${title}, ${subtitle || null}, ${slug}, ${image_url}, ${JSON.stringify(product_ids || [])}, ${display_order || 0}, ${is_active !== false})
+      RETURNING *
+    `;
+    
+    console.log(`✅ Created warm chapter: ${newChapter[0].title}`);
+    res.json(newChapter[0]);
+  } catch (error: any) {
+    console.error('❌ Create warm chapter error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.put('/api/warm-chapters/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, subtitle, slug, image_url, product_ids, display_order, is_active } = req.body;
+    
+    const updatedChapter = await sql`
+      UPDATE warm_chapters
+      SET 
+        title = ${title},
+        subtitle = ${subtitle || null},
+        slug = ${slug},
+        image_url = ${image_url},
+        product_ids = ${JSON.stringify(product_ids || [])},
+        display_order = ${display_order || 0},
+        is_active = ${is_active !== false},
+        updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    if (updatedChapter.length === 0) {
+      return res.status(404).json({ message: 'Warm chapter not found' });
+    }
+    
+    console.log(`✅ Updated warm chapter: ${updatedChapter[0].title}`);
+    res.json(updatedChapter[0]);
+  } catch (error: any) {
+    console.error('❌ Update warm chapter error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+app.delete('/api/warm-chapters/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await sql`DELETE FROM warm_chapters WHERE id = ${id}`;
+    
+    console.log(`✅ Deleted warm chapter: ${id}`);
+    res.json({ message: 'Warm chapter deleted successfully' });
+  } catch (error: any) {
+    console.error('❌ Delete warm chapter error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // ==================== COLLECTIONS ROUTES ====================
 
 app.get('/api/collections', async (req, res) => {
