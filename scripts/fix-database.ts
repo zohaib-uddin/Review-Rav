@@ -199,3 +199,148 @@ async function fixDatabase() {
 }
 
 fixDatabase();
+
+// Step 7: Add new tables and columns for Checkout System
+async function fixStep7Database() {
+  console.log('\n🛒 Fixing Step 7 Checkout System tables...\n');
+  
+  try {
+    // Fix users table - rename password to password_hash
+    console.log('📝 Fixing users table...');
+    try {
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash varchar(255)`;
+      console.log('  ✓ Added: password_hash column');
+    } catch (e: any) {
+      console.log('  ⚠️  password_hash:', e.message.slice(0, 80));
+    }
+    
+    // Fix otp_verifications table - rename otp to otp_code, is_verified to is_used
+    console.log('\n🔐 Fixing otp_verifications table...');
+    try {
+      await sql`ALTER TABLE otp_verifications ADD COLUMN IF NOT EXISTS otp_code varchar(6)`;
+      console.log('  ✓ Added: otp_code column');
+    } catch (e: any) {
+      console.log('  ⚠️  otp_code:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE otp_verifications ADD COLUMN IF NOT EXISTS is_used boolean NOT NULL DEFAULT false`;
+      console.log('  ✓ Added: is_used column');
+    } catch (e: any) {
+      console.log('  ⚠️  is_used:', e.message.slice(0, 80));
+    }
+    
+    // Fix orders table with new columns
+    console.log('\n📦 Fixing orders table...');
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_id varchar(50)`;
+      console.log('  ✓ Added: tracking_id column');
+    } catch (e: any) {
+      console.log('  ⚠️  tracking_id:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS email varchar(255)`;
+      console.log('  ✓ Added: email column');
+    } catch (e: any) {
+      console.log('  ⚠️  email:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status varchar(20) NOT NULL DEFAULT 'unpaid'`;
+      console.log('  ✓ Added: payment_status column');
+    } catch (e: any) {
+      console.log('  ⚠️  payment_status:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax numeric(10,2) NOT NULL DEFAULT '0'`;
+      console.log('  ✓ Added: tax column');
+    } catch (e: any) {
+      console.log('  ⚠️  tax:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_address_id uuid`;
+      console.log('  ✓ Added: shipping_address_id column');
+    } catch (e: any) {
+      console.log('  ⚠️  shipping_address_id:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_address_id uuid`;
+      console.log('  ✓ Added: billing_address_id column');
+    } catch (e: any) {
+      console.log('  ⚠️  billing_address_id:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_notes text`;
+      console.log('  ✓ Added: order_notes column');
+    } catch (e: any) {
+      console.log('  ⚠️  order_notes:', e.message.slice(0, 80));
+    }
+    try {
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_method varchar(20) NOT NULL DEFAULT 'standard'`;
+      console.log('  ✓ Added: shipping_method column');
+    } catch (e: any) {
+      console.log('  ⚠️  shipping_method:', e.message.slice(0, 80));
+    }
+    
+    // Create addresses table if not exists
+    console.log('\n🏠 Creating addresses table...');
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS addresses (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid NOT NULL,
+          country varchar(100) NOT NULL DEFAULT 'Pakistan',
+          province varchar(100) NOT NULL,
+          city varchar(100) NOT NULL,
+          postal_code varchar(10) NOT NULL,
+          street_address text NOT NULL,
+          phone varchar(20) NOT NULL,
+          is_default boolean NOT NULL DEFAULT false,
+          address_type varchar(20) NOT NULL DEFAULT 'shipping',
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `;
+      console.log('  ✓ Created: addresses table');
+      
+      // Create indexes
+      await sql`CREATE INDEX IF NOT EXISTS addresses_user_idx ON addresses(user_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS addresses_default_idx ON addresses(is_default)`;
+      console.log('  ✓ Created: addresses indexes');
+    } catch (e: any) {
+      console.log('  ⚠️  addresses table:', e.message.slice(0, 80));
+    }
+    
+    // Create wishlist table if not exists
+    console.log('\n❤️ Creating wishlist table...');
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS wishlist (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid NOT NULL,
+          product_id uuid NOT NULL,
+          variant_id uuid,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          UNIQUE(user_id, product_id, variant_id)
+        )
+      `;
+      console.log('  ✓ Created: wishlist table');
+      
+      // Create indexes
+      await sql`CREATE INDEX IF NOT EXISTS wishlist_user_idx ON wishlist(user_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS wishlist_product_idx ON wishlist(product_id)`;
+      console.log('  ✓ Created: wishlist indexes');
+    } catch (e: any) {
+      console.log('  ⚠️  wishlist table:', e.message.slice(0, 80));
+    }
+    
+    console.log('\n═══════════════════════════════════════');
+    console.log('✅ STEP 7 DATABASE FIX COMPLETE!');
+    console.log('═══════════════════════════════════════\n');
+    
+  } catch (error) {
+    console.error('❌ Error fixing database:', error);
+    throw error;
+  }
+}
+
+// Run the fix
+fixStep7Database();
