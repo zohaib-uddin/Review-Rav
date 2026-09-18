@@ -87,6 +87,22 @@ export interface CartItem {
   quantity: number;
   size: string;
   color: string;
+  animateQuantity?: boolean;
+  assembleSequence?: number;
+}
+
+interface FlyingAnimation {
+  id: string;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  imageUrl: string;
+  title: string;
+  size: string;
+  color: string;
+  quantity: number;
+  onComplete: () => void;
 }
 
 export interface User {
@@ -154,9 +170,7 @@ export interface WarmChapter {
   updated_at: string;
 }
 
-// Empty initial state - data will be fetched from API
-
-interface StoreState {
+interface CartState {
   user: User | null;
   cart: CartItem[];
   wishlist: string[];
@@ -167,11 +181,14 @@ interface StoreState {
   warmChapters: WarmChapter[];
   isLoading: boolean;
   apiAvailable: boolean;
+  isCartSidebarOpen: boolean;
+  flyingAnimations: FlyingAnimation[];
+  animateHeaderIcon: boolean;
   
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, name: string, password: string) => Promise<boolean>;
   logout: () => void;
-  addToCart: (product: Product, size: string, color: string) => void;
+  addToCart: (product: Product, size: string, color: string, startRect?: DOMRect) => void;
   removeFromCart: (productId: string, size: string) => void;
   updateCartQuantity: (productId: string, size: string, quantity: number) => void;
   clearCart: () => void;
@@ -186,9 +203,17 @@ interface StoreState {
   addProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
   addReview: (review: Review) => void;
+  toggleCartSidebar: () => void;
+  closeCartSidebar: () => void;
+  openCartSidebar: () => void;
+  addFlyingAnimation: (animation: FlyingAnimation) => void;
+  removeFlyingAnimation: (id: string) => void;
+  triggerHeaderIconAnimation: () => void;
 }
 
-export const useStore = create<StoreState>((set, get) => ({
+// Empty initial state - data will be fetched from API
+
+export const useStore = create<CartState>((set, get) => ({
   user: null,
   cart: [],
   wishlist: [],
@@ -199,6 +224,9 @@ export const useStore = create<StoreState>((set, get) => ({
   warmChapters: [],
   isLoading: false,
   apiAvailable: false,
+  isCartSidebarOpen: false,
+  flyingAnimations: [],
+  animateHeaderIcon: false,
 
   login: async (email: string, password: string) => {
     try {
@@ -240,17 +268,41 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ user: null, cart: [], wishlist: [] });
   },
 
-  addToCart: (product, size, color) => {
+  addToCart: (product, size, color, startRect) => {
     const { cart } = get();
     const existing = cart.find(item => item.product.id === product.id && item.size === size && item.color === color);
+    
     if (existing) {
-      set({ cart: cart.map(item =>
-        item.product.id === product.id && item.size === size && item.color === color
-          ? { ...item, quantity: item.quantity + 1 } : item
-      )});
+      // Animate quantity bounce for existing item
+      set({ 
+        cart: cart.map(item =>
+          item.product.id === product.id && item.size === size && item.color === color
+            ? { ...item, quantity: item.quantity + 1, animateQuantity: true } 
+            : item
+        ) 
+      });
+      setTimeout(() => {
+        set({ 
+          cart: cart.map(item =>
+            item.product.id === product.id && item.size === size && item.color === color
+              ? { ...item, animateQuantity: false } 
+              : item
+          ) 
+        });
+      }, 300);
     } else {
-      set({ cart: [...cart, { product, quantity: 1, size, color }] });
+      // Add new item with assembly sequence
+      const assembleSequence = cart.length + 1;
+      set({ 
+        cart: [...cart, { product, quantity: 1, size, color, assembleSequence }] 
+      });
     }
+    
+    // Trigger header icon animation
+    get().triggerHeaderIconAnimation();
+    
+    // Open cart sidebar automatically
+    get().openCartSidebar();
   },
 
   removeFromCart: (productId, size) => {
@@ -353,5 +405,24 @@ export const useStore = create<StoreState>((set, get) => ({
   addReview: (review) => {
     set({ reviews: [...get().reviews, review] });
     // In production, this would call api.addReview(review)
+  },
+
+  toggleCartSidebar: () => set((state) => ({ isCartSidebarOpen: !state.isCartSidebarOpen })),
+  
+  closeCartSidebar: () => set({ isCartSidebarOpen: false }),
+  
+  openCartSidebar: () => set({ isCartSidebarOpen: true }),
+  
+  addFlyingAnimation: (animation) => set((state) => ({ 
+    flyingAnimations: [...state.flyingAnimations, animation] 
+  })),
+  
+  removeFlyingAnimation: (id) => set((state) => ({ 
+    flyingAnimations: state.flyingAnimations.filter(a => a.id !== id) 
+  })),
+  
+  triggerHeaderIconAnimation: () => {
+    set({ animateHeaderIcon: true });
+    setTimeout(() => set({ animateHeaderIcon: false }), 400);
   },
 }));
