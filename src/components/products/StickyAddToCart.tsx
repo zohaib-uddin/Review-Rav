@@ -1,128 +1,97 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, X } from 'lucide-react';
-import { Product } from '../../store/useStore';
+import { useState } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { ShoppingBag } from 'lucide-react';
 
 interface StickyAddToCartProps {
-  product: Product;
-  selectedSize: string;
-  selectedColor: string;
+  product: {
+    id: string;
+    name: string;
+    image_url?: string | null;
+    base_price: string;
+    compare_at_price?: string | null;
+  };
   onAddToCart: () => void;
-  onBuyNow: () => void;
 }
 
-export default function StickyAddToCart({
-  product,
-  selectedSize,
-  selectedColor,
-  onAddToCart,
-  onBuyNow,
-}: StickyAddToCartProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [scrolledPast, setScrolledPast] = useState(false);
+export default function StickyAddToCart({ product, onAddToCart }: StickyAddToCartProps) {
+  const [selectedSize, setSelectedSize] = useState<string>('M');
+  const { scrollY } = useScroll();
+  
+  // Show sticky bar when scrolled past main image gallery (around 600px)
+  const opacity = useTransform(scrollY, [500, 600], [0, 1]);
+  const y = useTransform(scrollY, [500, 600], [100, 0]);
 
-  useEffect(() => {
-    const mainButton = document.getElementById('main-atc-button');
-    const pageBottom = document.documentElement.scrollHeight - window.innerHeight;
-
-    const handleScroll = () => {
-      if (!mainButton) return;
-
-      const mainButtonRect = mainButton.getBoundingClientRect();
-      const scrollY = window.scrollY;
-
-      // Show sticky bar when main button scrolls out of view
-      if (mainButtonRect.bottom < 0 && !scrolledPast) {
-        setScrolledPast(true);
-      }
-
-      // Hide when near page bottom
-      const distanceFromBottom = pageBottom - scrollY;
-      const shouldShow = scrolledPast && distanceFromBottom > 150;
-
-      setIsVisible(shouldShow);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [scrolledPast]);
-
-  const price = product.salePrice || product.price || 0;
+  const sizes = ['S', 'M', 'L', 'XL'];
+  
+  // Calculate prices
+  const basePrice = parseFloat(product.base_price);
+  const comparePrice = product.compare_at_price ? parseFloat(product.compare_at_price) : null;
+  const discount = comparePrice ? Math.round(((comparePrice - basePrice) / comparePrice) * 100) : 0;
 
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t shadow-2xl safe-area-pb"
-        >
-          <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
-              {/* Product Info */}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                  <img
-                    src={product.image_url || product.images?.[0] || product.image}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-sm truncate">{product.name}</h4>
-                  <p className="text-xs text-gray-500">
-                    {selectedSize} / {selectedColor}
-                  </p>
-                </div>
-              </div>
+    <motion.div
+      style={{ opacity, y }}
+      className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg"
+    >
+      <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="flex items-center gap-4">
+          {/* Product Thumbnail */}
+          <div className="w-16 h-16 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden">
+            <img
+              src={product.image_url || '/placeholder.jpg'}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
+          </div>
 
-              {/* Price */}
-              <div className="flex-shrink-0">
-                {product.salePrice ? (
-                  <div className="text-right">
-                    <span className="block text-lg font-bold">Rs.{product.salePrice.toLocaleString()}</span>
-                    <span className="block text-xs text-gray-400 line-through">Rs.{product.base_price?.toLocaleString()}</span>
-                  </div>
-                ) : (
-                  <span className="block text-lg font-bold">Rs.{price.toLocaleString()}</span>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={onAddToCart}
-                  disabled={!selectedSize}
-                  className={`px-6 py-3 rounded-full font-bold text-sm transition-all ${
-                    selectedSize
-                      ? 'bg-black text-white hover:bg-gray-800'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  Add to Bag
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={onBuyNow}
-                  disabled={!selectedSize}
-                  className={`px-6 py-3 rounded-full font-bold text-sm transition-all ${
-                    selectedSize
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  Buy Now
-                </motion.button>
-              </div>
+          {/* Product Info */}
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-semibold truncate">{product.name}</h4>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-base font-bold text-purple-600">
+                Rs. {basePrice.toLocaleString()}
+              </span>
+              {comparePrice && comparePrice > basePrice && (
+                <>
+                  <span className="text-xs text-gray-400 line-through">
+                    Rs. {comparePrice.toLocaleString()}
+                  </span>
+                  <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium">
+                    -{discount}%
+                  </span>
+                </>
+              )}
             </div>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+
+          {/* Size Selector */}
+          <div className="hidden sm:flex items-center gap-2">
+            {sizes.map((size) => (
+              <button
+                key={size}
+                onClick={() => setSelectedSize(size)}
+                className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
+                  selectedSize === size
+                    ? 'bg-black text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+
+          {/* Add to Cart Button */}
+          <button
+            onClick={onAddToCart}
+            className="flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm whitespace-nowrap"
+          >
+            <ShoppingBag size={18} />
+            <span className="hidden sm:inline">Add to Cart</span>
+            <span className="sm:hidden">Add</span>
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 }

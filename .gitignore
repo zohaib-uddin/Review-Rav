@@ -2,51 +2,44 @@
 # Dependencies
 node_modules/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.env
+.env.local
+.env.*
+
 # Build outputs
 dist/
 build/
+*.min.js
+*.min.css
 .next/
-out/
+.nuxt/
+public/build/
 
-# Environment variables
-.env
+# Logs
+*.log
+
+# Environment specific
 .env.local
-*.env.*
+.env.production.local
+.env.development.local
 
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Logs
-*.log
-
-# Python cache (if applicable)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Temporary files
-*.tmp
-*.temp
-
-# Coverage reports
-coverage/
-htmlcov/
-
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db
-
-# Database files (if applicable)
-*.db
-*.sqlite
-*.sqlite3
-
-# Lock files
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
 ```
