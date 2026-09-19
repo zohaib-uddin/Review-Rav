@@ -1,85 +1,80 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { useEffect } from 'react';
 
 export default function CollectionsInFocus() {
-  const { products } = useStore();
-
-  const featuredProducts = products.filter(p => p.is_featured).slice(0, 4);
-
+  const { featuredCategories, fetchFeaturedCategories } = useStore();
+  
+  useEffect(() => {
+    fetchFeaturedCategories();
+  }, [fetchFeaturedCategories]);
+  
   return (
-    <section className="py-16 bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-12"
-        >
-          <p className="text-xs tracking-[0.3em] text-gray-500 mb-2">CURATED FOR YOU</p>
-          <h2 className="text-3xl md:text-4xl font-display font-bold">Collections in Focus</h2>
-          <p className="text-gray-500 mt-3 max-w-2xl mx-auto">
-            Our most-loved collections, all in one place
-          </p>
-        </motion.div>
-
-        <div className="grid md:grid-cols-2 gap-8">
+    <section className="py-16 bg-white">
+      <div className="max-w-[1400px] mx-auto px-4">
+        {/* Split Layout */}
+        <div className="grid lg:grid-cols-2 gap-8 items-center">
+          {/* Left Side - Static Lifestyle Image & Brand Description */}
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="relative overflow-hidden rounded-2xl aspect-[4/5] group"
+            className="relative overflow-hidden"
           >
-            <img
-              src="https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop"
-              alt="Winter Essentials"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 p-8">
-              <p className="text-white/70 text-sm tracking-widest mb-2">WINTER ESSENTIALS</p>
-              <h3 className="text-3xl font-bold text-white mb-3">Co-Ord Sets</h3>
-              <p className="text-white/80 text-sm mb-4">
-                Premium matching sets for effortless style
+            <div className="relative aspect-[4/5] rounded-none overflow-hidden">
+              <img
+                src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=800&h=1000&fit=crop"
+                alt="Our Collections"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="mt-8 lg:pr-8">
+              <p className="text-xs tracking-[0.3em] text-gray-500 mb-3">OUR STORY</p>
+              <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Collections in Focus</h2>
+              <p className="text-gray-600 leading-relaxed">
+                Our most-loved collections, carefully curated to bring you timeless pieces that define your style. 
+                Each category represents our commitment to quality, comfort, and contemporary design.
               </p>
-              <Link
-                to="/shop/co-ord-sets"
-                className="inline-flex items-center gap-2 text-white font-medium hover:gap-3 transition-all"
-              >
-                Shop Now <ArrowRight size={16} />
-              </Link>
             </div>
           </motion.div>
 
+          {/* Right Side - 2x2 Grid of Featured Categories */}
           <div className="grid grid-cols-2 gap-4">
-            {featuredProducts.map((product, i) => (
+            {featuredCategories.slice(0, 4).map((category, i) => (
               <motion.div
-                key={product.id}
+                key={category.id}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
+                className="group"
               >
-                <Link to={`/product/${product.id}`} className="group block">
-                  <div className="aspect-square rounded-xl overflow-hidden bg-gray-200">
+                <Link to={`/collections/${category.slug}`} className="block h-full">
+                  <div className="aspect-square rounded-none overflow-hidden bg-gray-100 relative">
                     <img
-                      src={product.image}
-                      alt={product.name}
+                      src={category.cover_image_url || 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=400&h=400&fit=crop'}
+                      alt={category.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                   </div>
-                  <div className="mt-3">
-                    <h4 className="text-sm font-medium line-clamp-1 group-hover:text-purple-600 transition-colors">
-                      {product.name}
-                    </h4>
-                    <p className="text-sm font-bold mt-1">
-                      Rs.{(product.salePrice || product.price || 0).toLocaleString()}
-                    </p>
+                  <div className="mt-3 text-center">
+                    <h4 className="text-sm font-medium uppercase tracking-wide">{category.name}</h4>
+                    <button className="mt-2 text-xs font-semibold uppercase tracking-wider hover:underline">
+                      Shop {category.name}
+                    </button>
                   </div>
                 </Link>
               </motion.div>
             ))}
+            
+            {/* Empty state if less than 4 categories */}
+            {featuredCategories.length === 0 && (
+              <div className="col-span-2 text-center py-12 text-gray-400">
+                <p>No featured categories yet. Admin can set up to 4 categories in the admin panel.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

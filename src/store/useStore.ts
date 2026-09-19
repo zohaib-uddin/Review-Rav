@@ -139,6 +139,9 @@ export interface Category {
   is_active: boolean;
   sort_order: number;
   tag: string | null;
+  // Collections in Focus fields
+  is_featured_in_focus: boolean;
+  display_order_in_focus: number;
 }
 
 export interface WarmChapter {
@@ -162,6 +165,7 @@ interface StoreState {
   wishlist: string[];
   products: Product[];
   categories: Category[];
+  featuredCategories: Category[];
   orders: Order[];
   reviews: Review[];
   warmChapters: WarmChapter[];
@@ -178,6 +182,7 @@ interface StoreState {
   toggleWishlist: (productId: string) => void;
   fetchProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
+  fetchFeaturedCategories: () => Promise<void>;
   fetchOrders: () => Promise<void>;
   fetchWarmChapters: () => Promise<void>;
   addOrder: (order: Order) => void;
@@ -194,6 +199,7 @@ export const useStore = create<StoreState>((set, get) => ({
   wishlist: [],
   products: [],
   categories: [],
+  featuredCategories: [],
   orders: [],
   reviews: [],
   warmChapters: [],
@@ -298,6 +304,20 @@ export const useStore = create<StoreState>((set, get) => ({
       set({ categories, apiAvailable: true });
     } catch (error: any) {
       console.error('❌ Failed to fetch categories:', error);
+      console.error('Error details:', error.message);
+      set({ apiAvailable: false });
+    }
+  },
+
+  fetchFeaturedCategories: async () => {
+    try {
+      console.log('🔄 Fetching featured categories for Collections in Focus...');
+      const response = await fetch('http://localhost:3001/api/categories/featured-in-focus');
+      const featuredCategories = await response.json();
+      console.log(`✅ Received ${featuredCategories.length} featured categories from API`);
+      set({ featuredCategories, apiAvailable: true });
+    } catch (error: any) {
+      console.error('❌ Failed to fetch featured categories:', error);
       console.error('Error details:', error.message);
       set({ apiAvailable: false });
     }

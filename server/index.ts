@@ -348,6 +348,65 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
+// Get featured categories for Collections in Focus (max 4)
+app.get('/api/categories/featured-in-focus', async (req, res) => {
+  try {
+    console.log('🎯 Fetching featured categories for Collections in Focus...');
+    
+    const categories = await sql`
+      SELECT * FROM categories 
+      WHERE is_active = true 
+        AND is_featured_in_focus = true 
+      ORDER BY display_order_in_focus ASC
+      LIMIT 4
+    `;
+    
+    console.log(`✅ Found ${categories.length} featured categories`);
+    res.json(categories);
+  } catch (error: any) {
+    console.error('❌ Get featured categories error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Update category (Admin only) - with validation for is_featured_in_focus max 4
+app.put('/api/categories/:id', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_featured_in_focus, display_order_in_focus, ...otherFields } = req.body;
+    
+    // Validate max 4 featured categories if enabling is_featured_in_focus
+    if (is_featured_in_focus === true) {
+      const featuredCount = await sql`
+        SELECT COUNT(*) as count FROM categories 
+        WHERE is_featured_in_focus = true AND id != ${id}
+      `;
+      
+      if (parseInt(featuredCount[0].count) >= 4) {
+        return res.status(400).json({ 
+          message: 'Maximum 4 categories can be featured in Collections in Focus' 
+        });
+      }
+    }
+    
+    const updateData: any = { ...otherFields };
+    if (is_featured_in_focus !== undefined) updateData.is_featured_in_focus = is_featured_in_focus;
+    if (display_order_in_focus !== undefined) updateData.display_order_in_focus = display_order_in_focus;
+    
+    const updated = await sql`
+      UPDATE categories 
+      SET ${sql(updateData)}, updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    res.json(updated[0]);
+  } catch (error: any) {
+    console.error('❌ Update category error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // ==================== WARM CHAPTERS ROUTES ====================
 
 app.get('/api/warm-chapters', async (req, res) => {
