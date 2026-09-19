@@ -340,12 +340,14 @@ export const auditLogs = pgTable('audit_logs', {
 }));
 
 // ==================== WARM CHAPTERS ====================
+// Warm chapters now link to categories via show_on_home_chapter flag
 export const warmChapters = pgTable('warm_chapters', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: varchar('title', { length: 255 }).notNull(),
   subtitle: varchar('subtitle', { length: 255 }),
   slug: varchar('slug', { length: 255 }).notNull().unique(),
   image_url: varchar('image_url', { length: 500 }).notNull(),
+  // Deprecated: product_ids - now using categories directly
   product_ids: jsonb('product_ids').default([]),
   display_order: integer('display_order').notNull().default(0),
   is_active: boolean('is_active').notNull().default(true),
