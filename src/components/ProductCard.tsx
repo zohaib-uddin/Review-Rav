@@ -62,7 +62,9 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
   const hasManualBadge = product.badge || product.is_new_arrival || product.is_best_seller;
   const showDiscountBadge = !hasManualBadge && discountPercent !== null;
 
-  // Handle Add to Cart with flying animation
+  // Handle Add to Cart with flying animation - using new CartContext
+  const { addToCart: addToCartWithAnimation } = useCart();
+  
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -72,46 +74,11 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
       return;
     }
 
-    const buttonRect = e.currentTarget.getBoundingClientRect();
-    const cartIcon = document.querySelector('[data-cart-icon]');
-    const cartRect = cartIcon?.getBoundingClientRect();
-
-    if (cartRect) {
-      const flyingElement = document.createElement('div');
-      flyingElement.style.position = 'fixed';
-      flyingElement.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-      flyingElement.style.top = `${buttonRect.top + buttonRect.height / 2}px`;
-      flyingElement.style.width = '60px';
-      flyingElement.style.height = '60px';
-      flyingElement.style.backgroundImage = `url(${images[currentImageIndex]})`;
-      flyingElement.style.backgroundSize = 'cover';
-      flyingElement.style.backgroundPosition = 'center';
-      flyingElement.style.borderRadius = '50%';
-      flyingElement.style.zIndex = '9999';
-      flyingElement.style.transition = 'all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-      flyingElement.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
-      
-      document.body.appendChild(flyingElement);
-
-      setTimeout(() => {
-        flyingElement.style.left = `${cartRect.left + cartRect.width / 2}px`;
-        flyingElement.style.top = `${cartRect.top + cartRect.height / 2}px`;
-        flyingElement.style.width = '20px';
-        flyingElement.style.height = '20px';
-        flyingElement.style.opacity = '0.3';
-      }, 10);
-
-      setTimeout(() => {
-        flyingElement.remove();
-        const firstColor = product.colors?.[0];
-        const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
-        addToCart(product, selectedSize, colorName);
-      }, 800);
-    } else {
-      const firstColor = product.colors?.[0];
-      const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
-      addToCart(product, selectedSize, colorName);
-    }
+    const firstColor = product.colors?.[0];
+    const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
+    
+    // Use the new CartContext addToCart which triggers flying animation
+    addToCartWithAnimation(product, selectedSize, colorName, 1, e.currentTarget as HTMLElement);
   };
 
   // Handle Quick View
