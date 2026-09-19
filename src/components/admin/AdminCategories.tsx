@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Edit, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
 export default function AdminCategories() {
-  const { categories, fetchCategories } = useStore();
+  const { categories, fetchCategories, featuredCategories, fetchFeaturedCategories } = useStore();
   const [showForm, setShowForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [formData, setFormData] = useState({
@@ -16,28 +16,67 @@ export default function AdminCategories() {
     cover_image_url: '',
     parent_id: null as string | null,
     sort_order: 0,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
   });
+  const [featuredCount, setFeaturedCount] = useState(0);
+  const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
     fetchCategories();
+    fetchFeaturedCategories();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    // Count currently featured categories (excluding the one being edited)
+    const currentlyFeatured = categories.filter(c => c.is_featured_in_focus && c.id !== editingCategory?.id);
+    setFeaturedCount(currentlyFeatured.length);
+  }, [categories, editingCategory]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // API call to create/update category
-    console.log('Submitting category:', formData);
-    setShowForm(false);
-    setEditingCategory(null);
-    setFormData({
-      name: '',
-      slug: '',
-      description: '',
-      badge: '',
-      tag: '',
-      cover_image_url: '',
-      parent_id: null,
-      sort_order: 0,
-    });
+    setValidationError('');
+
+    // Validation: Check if trying to enable featured when 4 already exist
+    if (formData.is_featured_in_focus && !editingCategory?.is_featured_in_focus) {
+      if (featuredCount >= 4) {
+        setValidationError('Maximum 4 categories can be featured in Collections in Focus');
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch(`/api/categories/${editingCategory ? editingCategory.id : 'new'}`, {
+        method: editingCategory ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      console.log('Submitting category:', formData);
+      setShowForm(false);
+      setEditingCategory(null);
+      setFormData({
+        name: '',
+        slug: '',
+        description: '',
+        badge: '',
+        tag: '',
+        cover_image_url: '',
+        parent_id: null,
+        sort_order: 0,
+        is_featured_in_focus: false,
+        display_order_in_focus: 0,
+      });
+      fetchCategories();
+      fetchFeaturedCategories();
+    } catch (error: any) {
+      setValidationError(error.message);
+    }
   };
 
   const handleEdit = (category: any) => {
@@ -51,6 +90,8 @@ export default function AdminCategories() {
       cover_image_url: category.cover_image_url || '',
       parent_id: category.parent_id,
       sort_order: category.sort_order,
+      is_featured_in_focus: category.is_featured_in_focus || false,
+      display_order_in_focus: category.display_order_in_focus || 0,
     });
     setShowForm(true);
   };
@@ -62,11 +103,60 @@ export default function AdminCategories() {
     }
   };
 
+  const handleToggleFeatured = async (category: any, newValue: boolean) => {
+    setValidationError('');
+    
+    // Validation: Check if trying to enable when 4 already exist
+    if (newValue && featuredCount >= 4) {
+      setValidationError('Maximum 4 categories can be featured in Collections in Focus');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/categories/${category.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured_in_focus: newValue }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      fetchCategories();
+      fetchFeaturedCategories();
+    } catch (error: any) {
+      setValidationError(error.message);
+    }
+  };
+
   const mainCategories = categories.filter(c => !c.parent_id);
   const subcategories = categories.filter(c => c.parent_id);
 
   return (
     <div>
+      {/* Info Banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="text-blue-600 mt-0.5" size={20} />
+          <div>
+            <h4 className="font-semibold text-blue-900">Collections in Focus - Featured Categories</h4>
+            <p className="text-sm text-blue-700 mt-1">
+              Currently <strong>{featuredCount}/4</strong> categories are featured on the homepage. 
+              You can select up to 4 categories to appear in the "Collections in Focus" section.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Validation Error Message */}
+      {validationError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+          <p className="text-red-700 font-medium">{validationError}</p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Categories Management</h2>
         <button
@@ -96,9 +186,52 @@ export default function AdminCategories() {
                         {category.badge}
                       </span>
                     )}
+                    {category.is_featured_in_focus && (
+                      <span className="inline-block mt-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                        ✓ Featured in Focus
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4">
+                  {/* Featured Toggle */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Featured:</label>
+                    <button
+                      onClick={() => handleToggleFeatured(category, !category.is_featured_in_focus)}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${
+                        category.is_featured_in_focus ? 'bg-green-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          category.is_featured_in_focus ? 'left-7' : 'left-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  {/* Display Order Input */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">Order:</label>
+                    <input
+                      type="number"
+                      value={category.display_order_in_focus || 0}
+                      onChange={(e) => {
+                        const newOrder = parseInt(e.target.value);
+                        fetch(`/api/categories/${category.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ display_order_in_focus: newOrder }),
+                        }).then(() => {
+                          fetchCategories();
+                          fetchFeaturedCategories();
+                        });
+                      }}
+                      className="w-16 px-2 py-1 border rounded-lg text-sm"
+                      min="0"
+                      max="3"
+                    />
+                  </div>
                   <button
                     onClick={() => handleEdit(category)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -129,9 +262,52 @@ export default function AdminCategories() {
                       <div>
                         <h4 className="font-medium">{category.name}</h4>
                         <p className="text-sm text-gray-500">Parent: {categories.find(c => c.id === category.parent_id)?.name}</p>
+                        {category.is_featured_in_focus && (
+                          <span className="inline-block mt-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                            ✓ Featured in Focus
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-4">
+                      {/* Featured Toggle */}
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600">Featured:</label>
+                        <button
+                          onClick={() => handleToggleFeatured(category, !category.is_featured_in_focus)}
+                          className={`relative w-12 h-6 rounded-full transition-colors ${
+                            category.is_featured_in_focus ? 'bg-green-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <div
+                            className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                              category.is_featured_in_focus ? 'left-7' : 'left-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      {/* Display Order Input */}
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600">Order:</label>
+                        <input
+                          type="number"
+                          value={category.display_order_in_focus || 0}
+                          onChange={(e) => {
+                            const newOrder = parseInt(e.target.value);
+                            fetch(`/api/categories/${category.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ display_order_in_focus: newOrder }),
+                            }).then(() => {
+                              fetchCategories();
+                              fetchFeaturedCategories();
+                            });
+                          }}
+                          className="w-16 px-2 py-1 border rounded-lg text-sm"
+                          min="0"
+                          max="3"
+                        />
+                      </div>
                       <button
                         onClick={() => handleEdit(category)}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -168,6 +344,11 @@ export default function AdminCategories() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {validationError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-red-700 text-sm font-medium">{validationError}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium mb-1.5">Name *</label>
                 <input
@@ -250,6 +431,50 @@ export default function AdminCategories() {
                   className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black"
                 />
               </div>
+              
+              {/* Collections in Focus Section */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-semibold mb-3">Collections in Focus Settings</h4>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                  <p className="text-sm text-blue-700">
+                    Current featured count: <strong>{featuredCount}/4</strong>
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_featured_in_focus}
+                      onChange={e => {
+                        const newValue = e.target.checked;
+                        if (newValue && featuredCount >= 4 && !editingCategory?.is_featured_in_focus) {
+                          setValidationError('Maximum 4 categories can be featured in Collections in Focus');
+                          return;
+                        }
+                        setFormData({ ...formData, is_featured_in_focus: newValue });
+                      }}
+                      className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                      disabled={featuredCount >= 4 && !formData.is_featured_in_focus}
+                    />
+                    <span className="text-sm font-medium">Feature in "Collections in Focus" section</span>
+                  </label>
+                </div>
+                {formData.is_featured_in_focus && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Display Order (0-3)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="3"
+                      value={formData.display_order_in_focus}
+                      onChange={e => setFormData({ ...formData, display_order_in_focus: Number(e.target.value) })}
+                      className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the grid</p>
+                  </div>
+                )}
+              </div>
+              
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
