@@ -171,8 +171,8 @@ app.get('/api/products', async (req, res) => {
         base_price: parseFloat(p.base_price) || 0,
         compare_at_price: p.compare_at_price ? parseFloat(p.compare_at_price) : null,
         is_active: p.is_active,
-        main_category_id: p.main_main_category_id, sub_category_id,
-        sub_category_id: p.sub_main_category_id, sub_category_id,
+        main_category_id: p.main_category_id,
+        sub_category_id: p.sub_category_id,
         main_category_slug: mainCategory?.slug || 'uncategorized',
         main_category_name: mainCategory?.name || 'Uncategorized',
         sub_category_slug: subCategory?.slug || null,
@@ -374,6 +374,49 @@ app.get('/api/warm-chapters', async (req, res) => {
   }
 });
 
+// Get warm chapter with categories by slug
+app.get('/api/warm-chapters/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    console.log(`🔥 Fetching warm chapter by slug: ${slug}`);
+
+    const chapters = await sql`
+      SELECT * FROM warm_chapters
+      WHERE slug = ${slug} AND is_active = true
+    `;
+
+    if (chapters.length === 0) {
+      return res.status(404).json({ message: 'Warm chapter not found' });
+    }
+
+    const chapter = chapters[0];
+
+    // If the chapter has category_ids, fetch those categories
+    let categories = [];
+    try {
+      const categoryIds = typeof chapter.category_ids === 'string'
+        ? JSON.parse(chapter.category_ids)
+        : (chapter.category_ids || []);
+
+      if (categoryIds && categoryIds.length > 0) {
+        const fetchedCategories = await sql`
+          SELECT * FROM categories
+          WHERE id = ANY(${categoryIds}) AND is_active = true
+          ORDER BY display_order ASC
+        `;
+        categories = fetchedCategories;
+      }
+    } catch (e) {
+      console.error('Error parsing category_ids:', e);
+    }
+
+    res.json({ ...chapter, categories });
+  } catch (error: any) {
+    console.error('❌ Get warm chapter error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Admin-only routes for warm chapters management
 app.post('/api/warm-chapters', authenticateToken, adminOnly, async (req, res) => {
   try {
@@ -483,6 +526,53 @@ app.get('/api/collections/:slug', async (req, res) => {
     console.error('❌ Get collection error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
+
+// Get collection products by slug
+app.get('/api/collections/:slug/products', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    console.log(`📚 Fetching products for collection: ${slug}`);
+
+    // First get the collection
+    const collections = await sql`
+      SELECT * FROM collections
+      WHERE slug = ${slug} AND is_active = true
+    `;
+
+    if (collections.length === 0) {
+      return res.status(404).json({ message: 'Collection not found' });
+    }
+
+    const collection = collections[0];
+
+    // Get products from collection_products join table
+    const collectionProducts = await sql`
+      SELECT cp.product_id, cp.sort_order
+      FROM collection_products cp
+      WHERE cp.collection_id = ${collection.id} AND cp.is_active = true
+      ORDER BY cp.sort_order ASC
+    `;
+
+    if (collectionProducts.length === 0) {
+      return res.json([]);
+    }
+
+    const productIds = collectionProducts.map((cp: any) => cp.product_id);
+
+    // Fetch the actual products
+    const products = await sql`
+      SELECT * FROM products
+      WHERE id = ANY(${productIds}) AND is_active = true
+      ORDER BY created_at DESC
+    `;
+
+    console.log(`✅ Found ${products.length} products for collection ${slug}`);
+    res.json(products);
+  } catch (error: any) {
+    console.error('❌ Get collection products error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 });
 
 // ==================== ORDERS ROUTES ====================
