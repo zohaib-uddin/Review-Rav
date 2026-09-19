@@ -508,31 +508,97 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/orders', authenticateToken, async (req, res) => {
+// Place order - Updated for Step 7 with auto account creation
+app.post('/api/orders', async (req, res) => {
   try {
-    const order = req.body;
-    const orderNumber = `RVZ-${Date.now().toString().slice(-6)}`;
+    const { email, shippingAddress, billingAddress, items, subtotal, shippingCost, tax, total, shippingMethod, orderNotes, paymentMethod = 'cod' } = req.body;
     
-    const result = await sql`
+    if (!email || !shippingAddress || !items || items.length === 0) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Generate order number and tracking ID
+    const orderNumber = `RVZ-${Date.now().toString().slice(-6)}`;
+    const trackingId = `TRK-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+    // Check if user exists, if not create auto account
+    let userId = null;
+    const existingUsers = await sql`SELECT id FROM users WHERE email = ${email}`;
+    
+    if (existingUsers.length > 0) {
+      userId = existingUsers[0].id;
+    } else {
+      // Auto-create user account
+      const newUser = await sql`
+        INSERT INTO users (email, name, phone, role, is_verified)
+        VALUES (${email}, ${`${shippingAddress.firstName} ${shippingAddress.lastName}`.trim()}, ${shippingAddress.phone}, 'customer', true)
+        RETURNING id
+      `;
+      userId = newUser[0].id;
+    }
+
+    // Save shipping address
+    const shippingAddr = await sql`
+      INSERT INTO addresses (user_id, country, province, city, postal_code, street_address, phone, is_default, address_type)
+      VALUES (${userId}, ${shippingAddress.country || 'Pakistan'}, ${shippingAddress.province}, ${shippingAddress.city}, ${shippingAddress.postalCode}, ${shippingAddress.address}, ${shippingAddress.phone}, false, 'shipping')
+      RETURNING id
+    `;
+
+    // Save billing address if different
+    let billingAddressId = null;
+    if (billingAddress && !billingAddress.sameAsShipping) {
+      const billingAddr = await sql`
+        INSERT INTO addresses (user_id, country, province, city, postal_code, street_address, phone, is_default, address_type)
+        VALUES (${userId}, ${billingAddress.country || 'Pakistan'}, ${billingAddress.province}, ${billingAddress.city}, ${billingAddress.postalCode}, ${billingAddress.address}, ${billingAddress.phone}, false, 'billing')
+        RETURNING id
+      `;
+      billingAddressId = billingAddr[0].id;
+    }
+
+    // Create order
+    const newOrder = await sql`
       INSERT INTO orders (
-        order_number, user_id, status, subtotal, shipping_cost, total,
-        shipping_address, notes, discount_code, discount_amount
+        order_number, tracking_id, user_id, email, status, payment_status,
+        subtotal, shipping_cost, tax, total,
+        shipping_address_id, billing_address_id, order_notes, shipping_method
       ) VALUES (
-        ${orderNumber}, ${order.user_id}, 'pending_verification',
-        ${order.subtotal}, ${order.shipping_cost}, ${order.total},
-        ${JSON.stringify(order.shipping_address)}, ${order.notes},
-        ${order.discount_code}, ${order.discount_amount}
+        ${orderNumber}, ${trackingId}, ${userId}, ${email}, 'pending', ${paymentMethod === 'cod' ? 'unpaid' : 'paid'},
+        ${subtotal}, ${shippingCost}, ${tax || 0}, ${total},
+        ${shippingAddr[0].id}, ${billingAddressId}, ${orderNotes || ''}, ${shippingMethod || 'standard'}
       )
       RETURNING *
     `;
-    
-    res.json(result[0]);
+
+    // Create order items
+    for (const item of items) {
+      await sql`
+        INSERT INTO order_items (
+          order_id, product_id, product_name, quantity, unit_price, total_price, sku, size, color
+        ) VALUES (
+          ${newOrder[0].id}, ${item.product.id}, ${item.product.name}, ${item.quantity},
+          ${item.product.salePrice || item.product.price || 0},
+          ${(item.product.salePrice || item.product.price || 0) * item.quantity},
+          ${item.product.sku}, ${item.size}, ${item.color}
+        )
+      `;
+    }
+
+    res.json({
+      success: true,
+      order: {
+        id: newOrder[0].id,
+        order_number: orderNumber,
+        tracking_id: trackingId,
+        total,
+      },
+    });
   } catch (error: any) {
     console.error('Create order error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
+// Update order status - Admin only
 app.patch('/api/orders/:id/status', authenticateToken, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
@@ -547,6 +613,45 @@ app.patch('/api/orders/:id/status', authenticateToken, adminOnly, async (req, re
     res.json(result[0]);
   } catch (error: any) {
     console.error('Update order status error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Update order payment status - Admin only
+app.patch('/api/orders/:id/payment-status', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { payment_status } = req.body;
+    
+    const result = await sql`
+      UPDATE orders SET payment_status = ${payment_status}, updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
+    
+    res.json(result[0]);
+  } catch (error: any) {
+    console.error('Update payment status error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get order by tracking ID (public for tracking)
+app.get('/api/orders/track/:trackingId', async (req, res) => {
+  try {
+    const { trackingId } = req.params;
+    
+    const orders = await sql`
+      SELECT * FROM orders WHERE tracking_id = ${trackingId}
+    `;
+    
+    if (orders.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    res.json(orders[0]);
+  } catch (error: any) {
+    console.error('Get order by tracking error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -661,7 +766,7 @@ app.get('/api/faqs', async (req, res) => {
 
 // ==================== OTP VERIFICATION ROUTES ====================
 
-// Send OTP
+// Send OTP - Using new modular approach
 app.post('/api/send-otp', async (req, res) => {
   try {
     const { email } = req.body;
@@ -676,10 +781,15 @@ app.post('/api/send-otp', async (req, res) => {
     // Set expiration time (10 minutes from now)
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     
-    // Save OTP to database
+    // Save OTP to database (using otp_code column)
     await sql`
-      INSERT INTO otp_verifications (email, otp, expires_at)
-      VALUES (${email}, ${otp}, ${expiresAt})
+      INSERT INTO otp_verifications (email, otp_code, expires_at, is_used)
+      VALUES (${email}, ${otp}, ${expiresAt}, false)
+      ON CONFLICT (email) DO UPDATE SET
+        otp_code = ${otp},
+        expires_at = ${expiresAt},
+        is_used = false,
+        created_at = NOW()
     `;
     
     // In production, send email with OTP
@@ -698,7 +808,7 @@ app.post('/api/send-otp', async (req, res) => {
   }
 });
 
-// Verify OTP
+// Verify OTP - Using new modular approach
 app.post('/api/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -707,12 +817,12 @@ app.post('/api/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
 
-    // Find OTP record
+    // Find OTP record (using otp_code column)
     const records = await sql`
       SELECT * FROM otp_verifications
       WHERE email = ${email} 
-        AND otp = ${otp} 
-        AND is_verified = false
+        AND otp_code = ${otp} 
+        AND is_used = false
         AND expires_at > NOW()
       ORDER BY created_at DESC
       LIMIT 1
@@ -722,10 +832,10 @@ app.post('/api/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
     
-    // Mark OTP as verified
+    // Mark OTP as used
     await sql`
       UPDATE otp_verifications
-      SET is_verified = true
+      SET is_used = true
       WHERE id = ${records[0].id}
     `;
     
