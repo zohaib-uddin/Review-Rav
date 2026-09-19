@@ -7,7 +7,6 @@ dist/
 build/
 .next/
 .nuxt/
-public/dist/
 out/
 
 # Python
@@ -20,7 +19,14 @@ env/
 venv/
 .venv/
 .ENV
+.env
+.env.*
+.env.local
 .python-version
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
 
 # Logs
 *.log
@@ -33,6 +39,7 @@ venv/
 .Trashes
 ehthumbs.db
 Thumbs.db
+Thumbs.db:encryptable
 
 # IDE
 .vscode/
@@ -40,25 +47,47 @@ Thumbs.db
 *.swp
 *.swo
 
-# Environment variables
+# Environment specific
 .env
 .env.local
 *.env.*
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
-
 # Temporary files
 *.tmp
 *.temp
-```
+*.bak
 
-Wait, I need to reconsider. The only modified file is `src/pages/ProductDetail.tsx`, which is a TypeScript React component file. This is a source code file, not a build artifact or temporary file. Looking at the change list again, there are no build artifacts, dependency directories, or temporary files mentioned.
+# Compiled files
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.class
+*.out
 
-Since the changes only involve source code files (.tsx), no files should be added to .gitignore.
-
-```gitignore
-
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
