@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, ShoppingBag, Truck, Shield, RefreshCw, Star, ChevronRight, Minus, Plus, ChevronDown, ChevronLeft, Check, Package, Ruler, Shirt, Scissors, Zap } from 'lucide-react';
+import { Heart, ShoppingBag, Truck, Shield, RefreshCw, Star, ChevronRight, Minus, Plus, ChevronDown, ChevronLeft, Check, Package, Ruler, Shirt, Scissors, Zap, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import SizeGuideModal from '../components/SizeGuideModal';
+import SizeGuideModal from '../components/products/SizeGuideModal';
+import CareInstructions from '../components/products/CareInstructions';
+import FAQAccordion from '../components/products/FAQAccordion';
+import StickyAddToCart from '../components/products/StickyAddToCart';
+import ProductCard from '../components/ProductCard';
 
 export default function ProductDetail() {
-  const { productSlug, id } = useParams(); // Support both slug and legacy id
+  const { productSlug, id } = useParams();
   const navigate = useNavigate();
   const { products, addToCart, wishlist, toggleWishlist, reviews, fetchProducts } = useStore();
   const [selectedSize, setSelectedSize] = useState('');
@@ -16,9 +20,19 @@ export default function ProductDetail() {
   const [addedToCart, setAddedToCart] = useState(false);
   const [expandedSpec, setExpandedSpec] = useState<string | null>('fabric');
   const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const specsSectionRef = useRef<HTMLDivElement>(null);
+  const [stickyTop, setStickyTop] = useState(96);
   
   useEffect(() => {
     fetchProducts();
+  }, []);
+
+  // Calculate sticky top offset based on navbar height
+  useEffect(() => {
+    const navbar = document.querySelector('nav');
+    if (navbar) {
+      setStickyTop(navbar.offsetHeight + 24);
+    }
   }, []);
 
   // Find product by slug (new) or by id (legacy)
@@ -66,17 +80,21 @@ export default function ProductDetail() {
     if (!selectedSize) return;
     const firstColor = product.colors?.[0] as any;
     const defaultColor = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
-    // Add to cart first
     for (let i = 0; i < quantity; i++) {
       addToCart(product, selectedSize, selectedColor || defaultColor);
     }
-    // Navigate to checkout
     navigate('/checkout');
   };
 
   const toggleSpec = (spec: string) => {
     setExpandedSpec(expandedSpec === spec ? null : spec);
   };
+
+  // Check if size guide should be shown
+  const showSizeGuideButton = product.size_guide || true; // Always show if no explicit false
+  
+  // Get rich HTML specs or fallback to default specs
+  const richSpecs = product.specs;
 
   return (
     <div className="min-h-screen">
@@ -97,60 +115,121 @@ export default function ProductDetail() {
 
       <div className="max-w-7xl mx-auto px-4 pb-16">
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-16">
-          {/* Image Gallery */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+          {/* Sticky Image Gallery - Left Column */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }} 
+            animate={{ opacity: 1, x: 0 }}
+            className="space-y-4"
+            style={{ position: 'sticky', top: stickyTop, height: 'fit-content' }}
+          >
+            {/* Main Image with Navigation Arrows */}
             <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-gray-100 group">
-              <img 
-                src={product.images?.[activeImage] || product.image} 
-                alt={product.name} 
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-              />
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={activeImage}
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  src={product.images?.[activeImage] || product.image_url || product.image} 
+                  alt={product.name} 
+                  className="w-full h-full object-cover"
+                />
+              </AnimatePresence>
+              
+              {/* Navigation Arrows - Thin, no background */}
               {product.images && product.images.length > 1 && (
                 <>
                   <button 
                     onClick={() => setActiveImage((activeImage - 1 + product.images.length) % product.images.length)} 
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 opacity-0 group-hover:opacity-100 transition-all hover:scale-110"
                   >
-                    <ChevronLeft size={20} />
+                    <ArrowLeft size={28} className="text-white drop-shadow-lg" />
                   </button>
                   <button 
                     onClick={() => setActiveImage((activeImage + 1) % product.images.length)} 
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-white"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 opacity-0 group-hover:opacity-100 transition-all hover:scale-110"
                   >
-                    <ChevronRight size={20} />
+                    <ArrowRight size={28} className="text-white drop-shadow-lg" />
                   </button>
                 </>
               )}
+              
+              {/* Badges */}
               <div className="absolute top-4 left-4 flex flex-col gap-2">
-                {product.isNew && (
-                  <span className="bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full">NEW</span>
+                {product.is_new_arrival && (
+                  <motion.span 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', damping: 15 }}
+                    className="bg-black text-white text-xs font-bold px-3 py-1.5 rounded-full"
+                  >
+                    NEW
+                  </motion.span>
                 )}
-                {product.isBestseller && (
-                  <span className="bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-full">BESTSELLER</span>
+                {product.is_best_seller && (
+                  <motion.span 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', damping: 15, delay: 0.1 }}
+                    className="bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-full"
+                  >
+                    BESTSELLER
+                  </motion.span>
                 )}
                 {product.salePrice && (
-                  <span className="bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full">
-                    {Math.round((1 - product.salePrice / (product.price || 1)) * 100)}% OFF
-                  </span>
+                  <motion.span 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', damping: 15, delay: 0.2 }}
+                    className="bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full"
+                  >
+                    {Math.round((1 - product.salePrice / (product.base_price || 1)) * 100)}% OFF
+                  </motion.span>
                 )}
               </div>
-              <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm">
-                {activeImage + 1} / {product.images?.length || 1}
-              </div>
+              
+              {/* Image Counter */}
+              {product.images && product.images.length > 1 && (
+                <div className="absolute bottom-20 right-4 bg-black/70 text-white text-xs px-3 py-1.5 rounded-full backdrop-blur-sm">
+                  {activeImage + 1} / {product.images.length}
+                </div>
+              )}
             </div>
             
+            {/* Gallery Dots - Clickable Pagination */}
             {product.images && product.images.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto">
+              <div className="flex justify-center gap-2">
+                {product.images.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveImage(i)}
+                    className={`transition-all duration-300 ${
+                      activeImage === i 
+                        ? 'w-3 h-3 bg-black rounded-full' 
+                        : 'w-2 h-2 bg-gray-300 rounded-full hover:bg-gray-400'
+                    }`}
+                    aria-label={`View image ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+            
+            {/* Thumbnail Gallery */}
+            {product.images && product.images.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto pb-2">
                 {product.images.map((img, i) => (
-                  <button 
-                    key={i} 
+                  <motion.button 
+                    key={i}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => setActiveImage(i)} 
                     className={`w-20 h-24 rounded-xl overflow-hidden border-2 transition-all flex-shrink-0 ${
-                      activeImage === i ? 'border-black scale-105 shadow-lg' : 'border-transparent opacity-60 hover:opacity-100'
+                      activeImage === i ? 'border-black shadow-lg' : 'border-transparent opacity-60 hover:opacity-100'
                     }`}
                   >
                     <img src={img} alt="" className="w-full h-full object-cover" />
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             )}
@@ -290,8 +369,8 @@ export default function ProductDetail() {
                 <p className="text-xs text-green-600 mt-2">✓ In Stock ({product.stockCount || 50} available)</p>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 mt-8">
+              {// Action Buttons - Main ATC Button with ID for sticky bar reference }
+              <div id="main-atc-button" className="flex gap-3 mt-8">
                 <motion.button 
                   whileTap={{ scale: 0.95 }} 
                   onClick={handleAddToCart} 
@@ -343,6 +422,11 @@ export default function ProductDetail() {
                 ))}
               </div>
 
+              {/* Care Instructions */}
+              <CareInstructions careInstructions={product.care_instructions} />
+
+              {/* FAQ Accordion */}
+              <FAQAccordion faqs={product.faq} />
               {/* Specifications Accordions */}
               <div className="mt-8 border-t pt-6 space-y-4">
                 <h3 className="font-bold text-lg mb-4">Product Specifications</h3>
@@ -523,7 +607,7 @@ export default function ProductDetail() {
       </div>
 
       {/* Size Guide Modal */}
-      {showSizeGuide && (
+      {showSizeGuideButton && showSizeGuide && (
         <SizeGuideModal
           product={product}
           onClose={() => setShowSizeGuide(false)}
