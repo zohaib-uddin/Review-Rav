@@ -145,7 +145,9 @@ app.get('/api/products', async (req, res) => {
     const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
     
     const transformedProducts = products.map((p: any) => {
-      const category = categoryMap.get(p.category_id);
+      // Find category - try multiple possible category ID fields
+      const categoryId = p.category_id || p.main_category_id;
+      const category = categoryId ? categoryMap.get(categoryId) : null;
       
       let images = [];
       try {
@@ -173,7 +175,7 @@ app.get('/api/products', async (req, res) => {
         base_price: basePrice,
         compare_at_price: comparePrice,
         is_active: p.is_active !== false,
-        category_id: p.category_id,
+        category_id: p.category_id || p.main_category_id || null,
         subcategory_id: p.subcategory_id || p.sub_category_id || null,
         category_slug: category?.slug || 'uncategorized',
         category_name: category?.name || 'Uncategorized',
