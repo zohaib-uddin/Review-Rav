@@ -83,7 +83,10 @@ export const products = pgTable('products', {
   // Variants & Attributes
   attributes: jsonb('attributes').default({ sizes: ['S', 'M', 'L', 'XL'], colors: ['Black'] }),
   variants_matrix: jsonb('variants_matrix').default([]),
-  size_guide: jsonb('size_guide').default([]),
+  size_guide: jsonb('size_guide').$type<{ chart: any[]; unit: string } | null>(),
+  care_instructions: jsonb('care_instructions').$type<{ icon: string; text: string }[] | null>(),
+  faq: jsonb('faq').$type<{ question: string; answer: string }[] | null>(),
+  specs: text('specs'), // Rich HTML from RTE for PDP
   
   // Status
   status: varchar('status', { length: 20 }).notNull().default('active'),
