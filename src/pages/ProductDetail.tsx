@@ -375,7 +375,7 @@ export default function ProductDetail() {
                 <p className="text-xs text-green-600 mt-2">✓ In Stock ({product.stockCount || 50} available)</p>
               </div>
 
-              {// Action Buttons - Main ATC Button with ID for sticky bar reference }
+              {/* Action Buttons - Main ATC Button with ID for sticky bar reference */}
               <div id="main-atc-button" className="flex gap-3 mt-8">
                 <motion.button 
                   whileTap={{ scale: 0.95 }} 
