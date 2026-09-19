@@ -66,9 +66,9 @@ export default function WarmChapterSection() {
                 transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
               >
-                {currentCards.map((chapter: any) => (
+                {currentCards.map((chapter: any, idx: number) => (
                   <Link
-                    key={chapter.id}
+                    key={`${chapter.id}-${idx}`}
                     to={`/collections/${chapter.slug}`}
                     className="group block"
                   >

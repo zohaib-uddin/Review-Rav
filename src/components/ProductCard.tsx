@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Eye, ShoppingBag } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useCart } from '../context/CartContext';
 
 interface ProductCardProps {
   product: any;
