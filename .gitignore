@@ -1,53 +1,58 @@
-```
+```gitignore
 # Dependencies
 node_modules/
-
-# Build outputs
-dist/
-build/
-target/
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.so
-*.egg-info/
-.eggs/
-
-# Virtual environments
+.Python
+env/
 venv/
 .venv/
-env/
-ENV/
+.ENV
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Logs
 *.log
 
-# Environment variables
+# Environment specific
 .env
 .env.local
 .env.*
+!.env.example
 
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS generated files
+# Build outputs
+dist/
+build/
+target/
+*.out
+*.exe
+*.dll
+*.so
+*.a
+*.o
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# OS
 .DS_Store
 Thumbs.db
 
-# Testing
-.coverage
-htmlcov/
-coverage/
-.pytest_cache/
-.mypy_cache/
-
-# Compressed files
+# Compressed
 *.zip
 *.gz
 *.tar
@@ -66,4 +71,8 @@ coverage/
 *.Z
 *.lz
 *.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
