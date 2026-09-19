@@ -250,6 +250,29 @@ app.get('/api/products/:slug', async (req, res) => {
   }
 });
 
+// Fetch products by array of IDs (for warm chapters product_ids)
+app.post('/api/products/by-ids', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.json([]);
+    }
+    
+    const productList = await sql`
+      SELECT * FROM products
+      WHERE is_active = true
+        AND id = ANY(${ids})
+    `;
+    
+    console.log(`✅ Found ${productList.length} products by IDs`);
+    res.json(productList);
+  } catch (error: any) {
+    console.error('Get products by IDs error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
   try {
     const product = req.body;

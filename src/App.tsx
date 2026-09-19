@@ -11,6 +11,7 @@ import { ScrollToTop, CookieConsent } from './components/FinalPolish';
 import { registerServiceWorker, generateManifest } from './pwa';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
+import ShopAllPage from './pages/ShopAllPage';
 import CollectionPage from './pages/CollectionPage';
 import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
@@ -47,6 +48,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<Shop />} />
+                <Route path="/shop-all" element={<ShopAllPage />} />
                 {/* New URL structure */}
                 <Route path="/collections/:categorySlug" element={<CollectionPage />} />
                 <Route path="/products/:productSlug" element={<ProductDetail />} />
