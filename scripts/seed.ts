@@ -342,7 +342,7 @@ async function seed() {
     
     await sql`
       INSERT INTO products (
-        name, slug, description, base_price, compare_at_price, category_id,
+        name, slug, description, base_price, compare_price, category_id,
         fabric, fabric_composition, fabric_finish, fit, graphic_print,
         garment_specs, garment_care, shipping_delivery, model_size,
         sku, is_new_arrival, is_best_seller, is_featured,
