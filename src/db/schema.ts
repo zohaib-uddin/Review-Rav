@@ -252,23 +252,27 @@ export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
   order_number: varchar('order_number', { length: 20 }).notNull().unique(),
   user_id: uuid('user_id'),
-  status: varchar('status', { length: 30 }).notNull().default('pending_verification'),
+  status: varchar('status', { length: 30 }).notNull().default('pending'), // pending, processing, shipped, delivered, cancelled
+  payment_status: varchar('payment_status', { length: 30 }).notNull().default('unpaid'), // unpaid, paid, refunded
+  payment_method: varchar('payment_method', { length: 30 }).notNull().default('cod'), // cod, online
   subtotal: numeric('subtotal', { precision: 10, scale: 2 }).notNull(),
   shipping_cost: numeric('shipping_cost', { precision: 10, scale: 2 }).notNull().default('0'),
   total: numeric('total', { precision: 10, scale: 2 }).notNull(),
-  shipping_address: jsonb('shipping_address').notNull(),
-  notes: text('notes'),
   discount_amount: numeric('discount_amount', { precision: 10, scale: 2 }).notNull().default('0'),
   discount_code: varchar('discount_code', { length: 50 }),
+  shipping_address: jsonb('shipping_address').notNull(),
+  billing_address: jsonb('billing_address'),
+  order_notes: text('order_notes'),
+  shipping_method: jsonb('shipping_method'),
+  items: jsonb('items').notNull(), // Snapshot of cart items
   tracking_number: varchar('tracking_number', { length: 100 }),
-  email_status: varchar('email_status', { length: 30 }).notNull().default('pending'),
-  timeline: jsonb('timeline').default([]),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   orderNumberIdx: uniqueIndex('orders_order_number_idx').on(table.order_number),
   userIdx: index('orders_user_idx').on(table.user_id),
   statusIdx: index('orders_status_idx').on(table.status),
+  paymentStatusIdx: index('orders_payment_status_idx').on(table.payment_status),
 }));
 
 // ==================== ORDER ITEMS ====================
@@ -356,13 +360,44 @@ export const warmChapters = pgTable('warm_chapters', {
 // ==================== OTP VERIFICATIONS ====================
 export const otpVerifications = pgTable('otp_verifications', {
   id: uuid('id').primaryKey().defaultRandom(),
-  email: varchar('email', { length: 255 }).notNull(),
-  otp: varchar('otp', { length: 6 }).notNull(),
+  phone: varchar('phone', { length: 20 }).notNull(),
+  otp_code: varchar('otp_code', { length: 6 }).notNull(),
   expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
-  is_verified: boolean('is_verified').notNull().default(false),
+  verified: boolean('verified').notNull().default(false),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
-  emailIdx: index('otp_verifications_email_idx').on(table.email),
+  phoneIdx: index('otp_verifications_phone_idx').on(table.phone),
+}));
+
+// ==================== ADDRESSES ====================
+export const addresses = pgTable('addresses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  type: varchar('type', { length: 20 }).notNull(), // 'shipping' or 'billing'
+  addressLine1: varchar('address_line_1', { length: 255 }).notNull(),
+  addressLine2: varchar('address_line_2', { length: 255 }),
+  city: varchar('city', { length: 100 }).notNull(),
+  region: varchar('region', { length: 100 }).notNull(),
+  postalCode: varchar('postal_code', { length: 20 }),
+  country: varchar('country', { length: 100 }).notNull().default('Pakistan'),
+  phone: varchar('phone', { length: 20 }).notNull(),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  userIdx: index('addresses_user_idx').on(table.userId),
+  defaultIdx: index('addresses_default_idx').on(table.isDefault),
+}));
+
+// ==================== WISHLISTS ====================
+export const wishlists = pgTable('wishlists', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  productId: uuid('product_id').references(() => products.id).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  userIdx: index('wishlists_user_idx').on(table.userId),
+  productIdx: index('wishlists_product_idx').on(table.productId),
+  uniqueIdx: uniqueIndex('wishlists_unique_idx').on(table.userId, table.productId),
 }));
 
 // ==================== COUPON CODES ====================
