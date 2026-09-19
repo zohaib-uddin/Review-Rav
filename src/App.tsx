@@ -9,6 +9,7 @@ import AccessibilityWrapper from './components/AccessibilityWrapper';
 import { ErrorBoundary, Loading } from './components/PerformanceOptimization';
 import { ScrollToTop, CookieConsent } from './components/FinalPolish';
 import { registerServiceWorker, generateManifest } from './pwa';
+import { CartProvider } from './context/CartContext';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
 import ShopAllPage from './pages/ShopAllPage';
@@ -40,39 +41,41 @@ function App() {
     <Router>
       <ErrorBoundary>
         <SEO />
-        <div className="min-h-screen bg-white flex flex-col">
-          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-          <Navbar />
-          <AccessibilityWrapper>
-            <Suspense fallback={<Loading />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/shop" element={<Shop />} />
-                <Route path="/shop-all" element={<ShopAllPage />} />
-                {/* New URL structure */}
-                <Route path="/collections/:categorySlug" element={<CollectionPage />} />
-                <Route path="/products/:productSlug" element={<ProductDetail />} />
-                {/* Legacy routes for backward compatibility */}
-                <Route path="/shop/:categorySlug" element={<CollectionPage />} />
-                <Route path="/product/:id" element={<ProductDetail />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/checkout" element={<Checkout />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/dashboard" element={user ? <CustomerDashboard /> : <Login />} />
-                <Route path="/admin" element={user?.role === 'admin' ? <AdminPanel /> : <Login />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/track-order" element={<TrackOrder />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/faq" element={<FAQ />} />
-                <Route path="/size-guide" element={<SizeGuide />} />
-              </Routes>
-            </Suspense>
-          </AccessibilityWrapper>
-          <Footer />
-          <ScrollToTop />
-          <CookieConsent />
-        </div>
+        <CartProvider>
+          <div className="min-h-screen bg-white flex flex-col">
+            <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+            <Navbar />
+            <AccessibilityWrapper>
+              <Suspense fallback={<Loading />}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="/shop" element={<Shop />} />
+                  <Route path="/shop-all" element={<ShopAllPage />} />
+                  {/* New URL structure */}
+                  <Route path="/collections/:categorySlug" element={<CollectionPage />} />
+                  <Route path="/products/:productSlug" element={<ProductDetail />} />
+                  {/* Legacy routes for backward compatibility */}
+                  <Route path="/shop/:categorySlug" element={<CollectionPage />} />
+                  <Route path="/product/:id" element={<ProductDetail />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/dashboard" element={user ? <CustomerDashboard /> : <Login />} />
+                  <Route path="/admin" element={user?.role === 'admin' ? <AdminPanel /> : <Login />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/track-order" element={<TrackOrder />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/faq" element={<FAQ />} />
+                  <Route path="/size-guide" element={<SizeGuide />} />
+                </Routes>
+              </Suspense>
+            </AccessibilityWrapper>
+            <Footer />
+            <ScrollToTop />
+            <CookieConsent />
+          </div>
+        </CartProvider>
       </ErrorBoundary>
     </Router>
   );
