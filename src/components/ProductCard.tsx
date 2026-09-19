@@ -1,26 +1,35 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Eye, ShoppingBag } from 'lucide-react';
+import { Eye, ShoppingBag } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 interface ProductCardProps {
   product: any;
   index?: number;
+  fullWidth?: boolean;
 }
 
-export default function ProductCard({ product, index = 0 }: ProductCardProps) {
+export default function ProductCard({ product, index = 0, fullWidth = false }: ProductCardProps) {
   const { addToCart } = useStore();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [showSizeSelector, setShowSizeSelector] = useState(false);
   const [selectedSize, setSelectedSize] = useState('');
   const [showQuickView, setShowQuickView] = useState(false);
+  const [quickViewExpanded, setQuickViewExpanded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Get all images for the product
   const images = product.images || [product.image];
   const hasMultipleImages = images.length > 1;
+
+  // Auto-select first size on hover
+  useEffect(() => {
+    if (isHovered && product.sizes && product.sizes.length > 0 && !selectedSize) {
+      setSelectedSize(product.sizes[0]);
+    }
+  }, [isHovered, product.sizes, selectedSize]);
 
   // Handle hover enter
   const handleMouseEnter = () => {
@@ -29,11 +38,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       setCurrentImageIndex(1); // Show second image on hover
     }
     setShowSizeSelector(true);
-    
-    // Auto-select first size if available
-    if (product.sizes && product.sizes.length > 0 && !selectedSize) {
-      setSelectedSize(product.sizes[0]);
-    }
   };
 
   // Handle hover leave
@@ -41,21 +45,22 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     setIsHovered(false);
     setCurrentImageIndex(0); // Back to first image
     setShowSizeSelector(false);
+    setQuickViewExpanded(false);
   };
 
-  // Navigate to next image
-  const nextImage = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  // Calculate discount percentage
+  const calculateDiscount = () => {
+    const comparePrice = product.compare_at_price || product.compare_price;
+    const actualPrice = product.price || product.base_price;
+    if (comparePrice && actualPrice && comparePrice > actualPrice) {
+      return Math.round(((comparePrice - actualPrice) / comparePrice) * 100);
+    }
+    return null;
   };
 
-  // Navigate to previous image
-  const prevImage = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
+  const discountPercent = calculateDiscount();
+  const hasManualBadge = product.badge || product.is_new_arrival || product.is_best_seller;
+  const showDiscountBadge = !hasManualBadge && discountPercent !== null;
 
   // Handle Add to Cart with flying animation
   const handleAddToCart = (e: React.MouseEvent) => {
@@ -67,15 +72,11 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       return;
     }
 
-    // Get button position
     const buttonRect = e.currentTarget.getBoundingClientRect();
-    
-    // Get cart icon position
     const cartIcon = document.querySelector('[data-cart-icon]');
     const cartRect = cartIcon?.getBoundingClientRect();
 
     if (cartRect) {
-      // Create flying element
       const flyingElement = document.createElement('div');
       flyingElement.style.position = 'fixed';
       flyingElement.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
@@ -92,7 +93,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       
       document.body.appendChild(flyingElement);
 
-      // Animate to cart
       setTimeout(() => {
         flyingElement.style.left = `${cartRect.left + cartRect.width / 2}px`;
         flyingElement.style.top = `${cartRect.top + cartRect.height / 2}px`;
@@ -101,7 +101,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         flyingElement.style.opacity = '0.3';
       }, 10);
 
-      // Remove after animation and add to cart
       setTimeout(() => {
         flyingElement.remove();
         const firstColor = product.colors?.[0];
@@ -109,7 +108,6 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
         addToCart(product, selectedSize, colorName);
       }, 800);
     } else {
-      // Fallback if cart icon not found
       const firstColor = product.colors?.[0];
       const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
       addToCart(product, selectedSize, colorName);
@@ -123,6 +121,10 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
     setShowQuickView(true);
   };
 
+  const price = product.price || product.base_price || 0;
+  const comparePrice = product.compare_at_price || product.compare_price;
+  const salePrice = product.salePrice || (comparePrice && comparePrice > price ? comparePrice : null);
+
   return (
     <motion.div
       ref={cardRef}
@@ -134,9 +136,9 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Product Image Container - 16:9 ratio */}
+      {/* Product Image Container - 9:16 aspect ratio, sharp corners */}
       <Link to={`/products/${product.slug}`} className="block">
-        <div className="relative overflow-hidden rounded-xl aspect-[16/9] bg-gray-100 border-2 border-gray-200 group-hover:border-black transition-all duration-300">
+        <div className="relative overflow-hidden aspect-[9/16] bg-gray-100 border-0">
           {/* Product Image */}
           <motion.img
             src={images[currentImageIndex]}
@@ -144,111 +146,93 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
             className="w-full h-full object-cover"
             initial={false}
             animate={{
-              scale: isHovered ? 1.1 : 1,
-              borderRadius: isHovered ? '30% 30% 30% 30% / 30% 30% 30% 30%' : '0%',
+              scale: isHovered ? 1.05 : 1,
             }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
           />
 
-          {/* Badge with zoom effect */}
-          {(product.isNew || product.salePrice || product.badge) && (
-            <motion.div
-              className="absolute top-3 left-3"
-              animate={{
-                scale: isHovered ? [1, 1.2, 1] : 1,
-              }}
-              transition={{
-                duration: 0.6,
-                repeat: isHovered ? Infinity : 0,
-                repeatDelay: 0.5,
-              }}
-            >
-              {product.isNew && (
-                <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 rounded-full">
-                  NEW
-                </span>
-              )}
-              {product.salePrice && !product.isNew && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full">
-                  SALE
-                </span>
-              )}
-              {product.badge && !product.isNew && !product.salePrice && (
-                <span className="bg-purple-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full">
-                  {product.badge}
-                </span>
-              )}
-            </motion.div>
-          )}
+          {/* Badge with priority logic */}
+          <div className="absolute top-3 left-3">
+            {/* Manual badges take priority */}
+            {product.is_new_arrival && (
+              <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 block">
+                NEW ARRIVAL
+              </span>
+            )}
+            {product.is_best_seller && !product.is_new_arrival && (
+              <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 block">
+                BEST SELLER
+              </span>
+            )}
+            {product.badge && !product.is_new_arrival && !product.is_best_seller && (
+              <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 block">
+                {product.badge}
+              </span>
+            )}
+            {/* Auto-calculated discount badge (only if no manual badge) */}
+            {showDiscountBadge && (
+              <motion.span 
+                className="bg-red-600 text-white text-[10px] font-bold px-3 py-1.5 block"
+                animate={{
+                  boxShadow: ['0 0 0 0 rgba(220, 38, 38, 0.4)', '0 0 0 8px rgba(220, 38, 38, 0)'],
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  repeatDelay: 0.5,
+                }}
+              >
+                {discountPercent}% OFF
+              </motion.span>
+            )}
+          </div>
 
-          {/* Quick View Icon - Top Right */}
+          {/* Quick View Button - Expands to show text */}
           <motion.button
             onClick={handleQuickView}
-            className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-lg hover:bg-black hover:text-white transition-colors"
-            initial={{ opacity: 0, scale: 0.8 }}
+            className="absolute top-3 right-3 bg-white text-black flex items-center overflow-hidden"
+            initial={{ opacity: 0, width: '40px', height: '40px', borderRadius: '50%' }}
             animate={{ 
               opacity: isHovered ? 1 : 0,
-              scale: isHovered ? 1 : 0.8,
+              width: quickViewExpanded ? '120px' : '40px',
+              height: '40px',
+              borderRadius: '50%',
             }}
             transition={{ duration: 0.3 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            onMouseEnter={() => setQuickViewExpanded(true)}
+            onMouseLeave={() => setQuickViewExpanded(false)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <Eye size={18} />
-          </motion.button>
-
-          {/* Image Navigation Arrows */}
-          {hasMultipleImages && isHovered && (
-            <>
-              <motion.button
-                onClick={prevImage}
-                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/90 rounded-full shadow-lg hover:bg-white transition-colors"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <ChevronLeft size={20} />
-              </motion.button>
-              <motion.button
-                onClick={nextImage}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/90 rounded-full shadow-lg hover:bg-white transition-colors"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <ChevronRight size={20} />
-              </motion.button>
-            </>
-          )}
-
-          {/* Image Indicator Dots */}
-          {hasMultipleImages && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
-              {images.map((_img: string, idx: number) => (
-                <div
-                  key={idx}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/50'
-                  }`}
-                />
-              ))}
+            <div className="w-[40px] h-[40px] flex items-center justify-center flex-shrink-0">
+              <Eye size={18} />
             </div>
-          )}
+            <motion.span 
+              className="text-xs font-bold whitespace-nowrap pr-2"
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ 
+                opacity: quickViewExpanded ? 1 : 0,
+                width: quickViewExpanded ? 'auto' : 0,
+              }}
+              transition={{ duration: 0.2 }}
+            >
+              Quick View
+            </motion.span>
+          </motion.button>
 
           {/* Size Selector - Slides up from bottom */}
           <AnimatePresence>
             {showSizeSelector && product.sizes && product.sizes.length > 0 && (
               <motion.div
-                initial={{ y: 100, opacity: 0 }}
+                initial={{ y: '100%', opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 100, opacity: 0 }}
+                exit={{ y: '100%', opacity: 0 }}
                 transition={{ duration: 0.3, ease: 'easeOut' }}
                 className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-3 border-t"
-                onClick={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
               >
                 <p className="text-xs font-medium mb-2 text-center">Select Size</p>
                 <div className="flex gap-2 justify-center flex-wrap">
@@ -260,7 +244,7 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
                         e.stopPropagation();
                         setSelectedSize(size);
                       }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      className={`px-3 py-1.5 text-xs font-medium border-2 transition-all ${
                         selectedSize === size
                           ? 'border-black bg-black text-white'
                           : 'border-gray-300 hover:border-black'
@@ -273,48 +257,29 @@ export default function ProductCard({ product, index = 0 }: ProductCardProps) {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Add to Cart Button - Appears on hover */}
-          <AnimatePresence>
-            {isHovered && selectedSize && (
-              <motion.button
-                onClick={handleAddToCart}
-                initial={{ y: 100, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 100, opacity: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                className="absolute bottom-3 left-3 right-3 bg-black text-white py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-lg"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <ShoppingBag size={16} />
-                Add to Cart
-              </motion.button>
-            )}
-          </AnimatePresence>
         </div>
       </Link>
 
       {/* Product Info */}
-      <div className="mt-3 px-1">
+      <div className="mt-3 px-0">
         <Link to={`/products/${product.slug}`}>
           <h3 className="text-sm font-normal text-gray-800 line-clamp-2 hover:text-black transition-colors">
             {product.name}
           </h3>
         </Link>
         <div className="flex items-center gap-2 mt-1.5">
-          {product.salePrice ? (
+          {salePrice && salePrice > price ? (
             <>
               <span className="text-sm font-bold text-black">
-                Rs.{product.salePrice.toLocaleString()}
+                Rs.{price.toLocaleString()}
               </span>
               <span className="text-xs text-gray-400 line-through">
-                Rs.{product.price?.toLocaleString()}
+                Rs.{salePrice.toLocaleString()}
               </span>
             </>
           ) : (
             <span className="text-sm font-bold text-black">
-              Rs.{product.price?.toLocaleString()}
+              Rs.{price.toLocaleString()}
             </span>
           )}
         </div>
