@@ -1,30 +1,66 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Heart, ShoppingBag, User, Menu, X, Shield } from 'lucide-react';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
+import { Search, Heart, ShoppingBag, User, Menu, X, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import MegaMenu from './MegaMenu';
 import SearchModal from './SearchModal';
-import LanguageSwitcher from './LanguageSwitcher';
+
+const announcementSlides = [
+  "Flat 10% OFF on Online Payments 💳",
+  "Up to 50% OFF Sale 🔥",
+  "FREE Shipping Above Rs.3,000 🚚",
+  "New Drops Every Week ⚡",
+];
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const [showAnnouncement, setShowAnnouncement] = useState(true);
+  const { scrollY } = useScroll();
+  const logoRef = useRef<HTMLDivElement>(null);
+  
+  // Logo scale based on scroll position
+  const logoScale = useTransform(scrollY, [0, 200], [1, 0.85]);
+  const logoFontSize = useTransform(scrollY, [0, 200], ['2.5rem', '1.75rem']);
+  
   const cart = useStore(state => state.cart);
   const wishlist = useStore(state => state.wishlist);
   const user = useStore(state => state.user);
   const categories = useStore(state => state.categories);
   const fetchCategories = useStore(state => state.fetchCategories);
   const navigate = useNavigate();
-
+  
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      setIsScrolled(currentScrollY > 50);
+      
+      // Hide announcement on scroll down, show on scroll up
+      if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        setShowAnnouncement(false);
+      } else if (currentScrollY < lastScrollY) {
+        setShowAnnouncement(true);
+      }
+      setLastScrollY(currentScrollY);
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
+  // Auto-rotate announcement slides
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % announcementSlides.length);
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -35,21 +71,70 @@ export default function Navbar() {
 
   const mainCategories = categories.filter(cat => !cat.parent_id);
 
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % announcementSlides.length);
+  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + announcementSlides.length) % announcementSlides.length);
+
   return (
     <>
-      {/* Announcement Bar */}
-      <div className="bg-black text-white text-xs py-2.5 overflow-hidden">
-        <div className="animate-marquee whitespace-nowrap flex">
-          <span className="mx-8">🔥 FREE SHIPPING ON ORDERS ABOVE Rs.3,000</span>
-          <span className="mx-8">⚡ NEW DROPS EVERY WEEK</span>
-          <span className="mx-8">💎 PREMIUM STREETWEAR</span>
-          <span className="mx-8">🚚 CASH ON DELIVERY AVAILABLE</span>
-          <span className="mx-8">↩️ 7-DAY EASY RETURNS</span>
-          <span className="mx-8">🔥 FREE SHIPPING ON ORDERS ABOVE Rs.3,000</span>
-          <span className="mx-8">⚡ NEW DROPS EVERY WEEK</span>
-          <span className="mx-8">💎 PREMIUM STREETWEAR</span>
-        </div>
-      </div>
+      {/* Announcement Bar with Carousel */}
+      <AnimatePresence>
+        {showAnnouncement && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="bg-gradient-to-r from-purple-900 via-black to-purple-900 text-white text-sm py-3 overflow-hidden relative"
+          >
+            <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-4">
+              <button
+                onClick={prevSlide}
+                className="absolute left-2 p-1 hover:bg-white/10 rounded-full transition-colors z-10"
+                aria-label="Previous slide"
+              >
+                <ChevronLeft size={18} strokeWidth={1.5} />
+              </button>
+              
+              <div className="overflow-hidden flex-1 text-center">
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={currentSlide}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                    className="font-medium tracking-wide"
+                  >
+                    {announcementSlides[currentSlide]}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+              
+              <button
+                onClick={nextSlide}
+                className="absolute right-2 p-1 hover:bg-white/10 rounded-full transition-colors z-10"
+                aria-label="Next slide"
+              >
+                <ChevronRight size={18} strokeWidth={1.5} />
+              </button>
+            </div>
+            
+            {/* Slide indicators */}
+            <div className="flex justify-center gap-2 mt-2">
+              {announcementSlides.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentSlide(idx)}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${
+                    idx === currentSlide ? 'bg-white w-4' : 'bg-white/40'
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Navbar */}
       <motion.nav
@@ -59,8 +144,8 @@ export default function Navbar() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`flex items-center justify-between transition-all duration-300 ${isScrolled ? 'h-16' : 'h-20'}`}>
-            {/* Left Side - Search & Mobile Menu */}
-            <div className="flex items-center gap-3">
+            {/* Left Side - Search Icon (Far Left) */}
+            <div className="flex items-center gap-2">
               <button
                 className="lg:hidden p-2"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -70,33 +155,43 @@ export default function Navbar() {
               <button
                 onClick={() => setIsSearchOpen(true)}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Search"
               >
                 <Search size={20} />
               </button>
             </div>
 
-            {/* Center - Logo */}
-            <Link to="/" className="flex items-center">
+            {/* Center - Logo with Dynamic Scale */}
+            <Link to="/" className="flex items-center" ref={logoRef}>
               <motion.h1
-                animate={{
-                  fontSize: isScrolled ? '1.5rem' : '2rem',
-                }}
-                transition={{ duration: 0.3 }}
-                className="font-black tracking-tighter font-display"
+                style={{ scale: logoScale, fontSize: logoFontSize }}
+                className="font-black tracking-tighter font-display transition-transform duration-300 origin-center"
               >
                 RAVENZA
               </motion.h1>
             </Link>
 
-            {/* Right Side - Icons */}
-            <div className="flex items-center gap-3">
-              <LanguageSwitcher />
-              <Link to="/dashboard" className="p-2 hover:bg-gray-100 rounded-full transition-colors hidden sm:block">
-                <User size={20} />
+            {/* Right Side - Tightly Grouped Icons */}
+            <div className="flex items-center gap-0">
+              {/* Admin Icon - Before Profile */}
+              {user?.role === 'admin' && (
+                <Link
+                  to="/admin/signin"
+                  className="p-2 hover:bg-gray-100 transition-colors"
+                  title="Admin Panel"
+                >
+                  <Shield size={18} className="text-purple-600" />
+                </Link>
+              )}
+              
+              {/* Profile Icon */}
+              <Link to="/dashboard" className="p-2 hover:bg-gray-100 transition-colors">
+                <User size={18} />
               </Link>
 
-              <Link to="/dashboard" className="p-2 hover:bg-gray-100 rounded-full transition-colors relative">
-                <Heart size={20} />
+              {/* Wishlist Icon */}
+              <Link to="/dashboard/wishlist" className="p-2 hover:bg-gray-100 transition-colors relative">
+                <Heart size={18} />
                 {wishlist.length > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
@@ -108,8 +203,9 @@ export default function Navbar() {
                 )}
               </Link>
 
-              <Link to="/cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors relative">
-                <ShoppingBag size={20} />
+              {/* Cart Icon */}
+              <Link to="/cart" className="p-2 hover:bg-gray-100 transition-colors relative">
+                <ShoppingBag size={18} />
                 {cartCount > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
@@ -119,16 +215,6 @@ export default function Navbar() {
                     {cartCount}
                   </motion.span>
                 )}
-              </Link>
-
-              {/* Admin Link */}
-              <Link
-                to="/admin"
-                className="hidden lg:flex items-center gap-1 text-sm font-medium text-purple-600 hover:text-purple-800 transition-colors"
-                title="Admin: admin@ravenza.pk / admin123"
-              >
-                <Shield size={14} />
-                <span className="hidden xl:inline">ADMIN</span>
               </Link>
             </div>
           </div>
@@ -209,7 +295,7 @@ export default function Navbar() {
                     <>
                       <Link to="/dashboard" className="block text-lg font-medium py-3 border-b">My Account</Link>
                       {user.role === 'admin' && (
-                        <Link to="/admin" className="block text-lg font-medium py-3 text-purple-600 border-b">
+                        <Link to="/admin/signin" className="block text-lg font-medium py-3 text-purple-600 border-b">
                           <Shield size={16} className="inline mr-2" /> Admin Panel
                         </Link>
                       )}
