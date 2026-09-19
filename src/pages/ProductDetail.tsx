@@ -65,6 +65,12 @@ export default function ProductDetail() {
 
   const isWishlisted = wishlist.includes(product.id);
   
+  const features = [
+    { icon: Truck, text: 'Free Shipping', sub: 'Above Rs.3,000' },
+    { icon: Shield, text: 'Secure Pay', sub: '100% Protected' },
+    { icon: RefreshCw, text: 'Easy Returns', sub: '7-Day Policy' },
+  ];
+  
   const handleAddToCart = () => {
     if (!selectedSize) return;
     const firstColor = product.colors?.[0] as any;
@@ -409,11 +415,7 @@ export default function ProductDetail() {
 
               {/* Features */}
               <div className="mt-6 grid grid-cols-3 gap-3">
-                {[
-                  { icon: Truck, text: 'Free Shipping', sub: 'Above Rs.3,000' },
-                  { icon: Shield, text: 'Secure Pay', sub: '100% Protected' },
-                  { icon: RefreshCw, text: 'Easy Returns', sub: '7-Day Policy' },
-                ].map((f, i) => (
+                {features.map((f, i) => (
                   <div key={i} className="text-center p-3 bg-gray-50 rounded-xl">
                     <f.icon size={18} className="mx-auto mb-1 text-gray-600" />
                     <span className="text-xs font-medium block">{f.text}</span>
