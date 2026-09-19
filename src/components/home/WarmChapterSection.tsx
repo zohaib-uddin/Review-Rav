@@ -110,7 +110,7 @@ export default function WarmChapterSection() {
 
           {/* Pagination Dots - Bottom Center with Active State */}
           <div className="flex justify-center gap-3 mt-10">
-            {Array.from({ length: totalSlides }).map((index) => (
+            {Array.from({ length: totalSlides }).map((_, index) => (
               <button
                 key={index}
                 onClick={() => goToSlide(index)}
