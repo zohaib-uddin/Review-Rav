@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { Product, CartItem } from '../store/useStore';
+import { Product, CartItem, useStore } from '../store/useStore';
 
 interface CartContextType {
   cart: CartItem[];
@@ -27,7 +27,12 @@ interface AnimationQueueItem {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const cart = useStore(state => state.cart);
+  const storeAddToCart = useStore(state => state.addToCart);
+  const storeRemoveFromCart = useStore(state => state.removeFromCart);
+  const storeUpdateCartQuantity = useStore(state => state.updateCartQuantity);
+  const storeClearCart = useStore(state => state.clearCart);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [animationQueue, setAnimationQueue] = useState<AnimationQueueItem[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -56,9 +61,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const triggerEl = item.triggerElement;
     const cartIcon = document.querySelector('[data-cart-icon]') as HTMLElement;
     
+    // Add item to store immediately
+    for (let i = 0; i < item.quantity; i++) {
+      storeAddToCart(item.product, item.size, item.color);
+    }
+
     if (!triggerEl || !cartIcon) {
-      // No animation, just add to cart
-      addItemToCart(item.product, item.size, item.color, item.quantity);
+      setIsSidebarOpen(true);
       setIsAnimating(false);
       return;
     }
@@ -66,22 +75,34 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const triggerRect = triggerEl.getBoundingClientRect();
     const cartRect = cartIcon.getBoundingClientRect();
 
-    // Create flying element
+    // Create flying element with image, title, and price
     const flyingElement = document.createElement('div');
     flyingElement.className = 'flying-cart-item';
     flyingElement.style.position = 'fixed';
     flyingElement.style.left = `${triggerRect.left + triggerRect.width / 2}px`;
     flyingElement.style.top = `${triggerRect.top + triggerRect.height / 2}px`;
-    flyingElement.style.width = '80px';
-    flyingElement.style.height = '80px';
-    flyingElement.style.backgroundImage = `url(${item.product.image_url || item.product.images?.[0] || item.product.image})`;
-    flyingElement.style.backgroundSize = 'cover';
-    flyingElement.style.backgroundPosition = 'center';
-    flyingElement.style.borderRadius = '12px';
-    flyingElement.style.zIndex = '9999';
-    flyingElement.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3)';
+    flyingElement.style.display = 'flex';
+    flyingElement.style.alignItems = 'center';
+    flyingElement.style.gap = '8px';
+    flyingElement.style.padding = '6px 12px 6px 6px';
+    flyingElement.style.backgroundColor = '#ffffff';
+    flyingElement.style.borderRadius = '9999px';
+    flyingElement.style.border = '1px solid rgba(0,0,0,0.1)';
+    flyingElement.style.zIndex = '99999';
+    flyingElement.style.boxShadow = '0 16px 36px rgba(0,0,0,0.25)';
     flyingElement.style.pointerEvents = 'none';
     flyingElement.style.transform = 'translate(-50%, -50%)';
+    
+    const imgSrc = item.product.image_url || item.product.images?.[0] || item.product.image || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop';
+    const price = item.product.price || item.product.base_price || 0;
+
+    flyingElement.innerHTML = `
+      <img src="${imgSrc}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 9999px; flex-shrink: 0;" />
+      <div style="display: flex; flex-direction: column; max-width: 130px; overflow: hidden;">
+        <span style="font-size: 11px; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">${item.product.name}</span>
+        <span style="font-size: 10px; font-weight: 600; color: #666; margin-top: 2px;">Rs.${price.toLocaleString()}</span>
+      </div>
+    `;
     
     document.body.appendChild(flyingElement);
 
@@ -94,27 +115,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const endX = cartRect.left + cartRect.width / 2;
     const endY = cartRect.top + cartRect.height / 2;
     
-    // Control point for bezier - creates an arc
+    // Control point for bezier - creates an elegant upward floating arc
     const controlX = (startX + endX) / 2;
-    const controlY = Math.min(startY, endY) - 100; // Arc upward
+    const controlY = Math.min(startY, endY) - 140;
 
-    // Animate using Web Animations API with bezier curve
+    // Animate smoothly using Web Animations API (900ms smooth gentle arc)
     const animation = flyingElement.animate([
       { 
-        transform: 'translate(-50%, -50%) scale(1)',
+        transform: 'translate(-50%, -50%) scale(1) rotate(0deg)',
+        opacity: 1,
         offset: 0,
       },
       { 
-        transform: `translate(${controlX - startX}px, ${controlY - startY}px) scale(0.9)`,
-        offset: 0.5,
+        transform: `translate(${controlX - startX}px, ${controlY - startY}px) scale(1.06) rotate(6deg)`,
+        opacity: 0.95,
+        offset: 0.45,
       },
       { 
-        transform: `translate(${endX - startX}px, ${endY - startY}px) scale(0.3)`,
+        transform: `translate(${endX - startX}px, ${endY - startY}px) scale(0.18) rotate(16deg)`,
+        opacity: 0.15,
         offset: 1,
       }
     ], {
-      duration: 700,
-      easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+      duration: 900,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
       fill: 'forwards'
     });
 
@@ -126,21 +150,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       // Remove flying element
       flyingElement.remove();
       
-      // Add item to cart
-      addItemToCart(item.product, item.size, item.color, item.quantity);
-      
-      // Open sidebar on first item
-      if (cart.length === 0) {
-        setIsSidebarOpen(true);
-      }
-      
+      // Auto open sidebar pop-up
+      setIsSidebarOpen(true);
       setIsAnimating(false);
     };
-  }, [cart.length]);
+  }, [storeAddToCart]);
 
   const createParticleExplosion = (x: number, y: number) => {
-    const particleCount = 12;
-    const colors = ['#000000', '#FFD700', '#C0C0C0', '#FFFFFF'];
+    const particleCount = 14;
+    const colors = ['#000000', '#F59E0B', '#EF4444', '#10B981', '#FFFFFF'];
     
     for (let i = 0; i < particleCount; i++) {
       const particle = document.createElement('div');
@@ -148,17 +166,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       particle.style.position = 'fixed';
       particle.style.left = `${x}px`;
       particle.style.top = `${y}px`;
-      particle.style.width = `${Math.random() * 8 + 4}px`;
+      particle.style.width = `${Math.random() * 6 + 4}px`;
       particle.style.height = particle.style.width;
       particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
       particle.style.borderRadius = '50%';
-      particle.style.zIndex = '9999';
+      particle.style.zIndex = '99999';
       particle.style.pointerEvents = 'none';
       
       document.body.appendChild(particle);
 
       const angle = (i / particleCount) * Math.PI * 2;
-      const velocity = Math.random() * 80 + 60;
+      const velocity = Math.random() * 70 + 40;
       const endX = Math.cos(angle) * velocity;
       const endY = Math.sin(angle) * velocity;
 
@@ -172,34 +190,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           opacity: 0,
         }
       ], {
-        duration: 500,
+        duration: 450,
         easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         fill: 'forwards'
       });
 
       animation.onfinish = () => particle.remove();
     }
-  };
-
-  const addItemToCart = (product: Product, size: string, color: string, quantity: number = 1) => {
-    setCart(prev => {
-      const existingIndex = prev.findIndex(
-        item => item.product.id === product.id && item.size === size && item.color === color
-      );
-      
-      if (existingIndex >= 0) {
-        // Item exists - update quantity with bounce effect handled in UI
-        const newCart = [...prev];
-        newCart[existingIndex] = {
-          ...newCart[existingIndex],
-          quantity: newCart[existingIndex].quantity + quantity
-        };
-        return newCart;
-      } else {
-        // New item - add to cart
-        return [...prev, { product, quantity, size, color }];
-      }
-    });
   };
 
   const addToCart = useCallback((
@@ -209,7 +206,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     quantity: number = 1,
     triggerElement?: HTMLElement
   ) => {
-    // Add to animation queue
     const queueItem: AnimationQueueItem = {
       product,
       size,
@@ -223,22 +219,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeFromCart = useCallback((productId: string, size: string) => {
-    setCart(prev => prev.filter(item => !(item.product.id === productId && item.size === size)));
-  }, []);
+    storeRemoveFromCart(productId, size);
+  }, [storeRemoveFromCart]);
 
   const updateCartQuantity = useCallback((productId: string, size: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId, size);
-      return;
-    }
-    setCart(prev => prev.map(item =>
-      item.product.id === productId && item.size === size
-        ? { ...item, quantity }
-        : item
-    ));
-  }, [removeFromCart]);
+    storeUpdateCartQuantity(productId, size, quantity);
+  }, [storeUpdateCartQuantity]);
 
-  const clearCart = useCallback(() => setCart([]), []);
+  const clearCart = useCallback(() => {
+    storeClearCart();
+  }, [storeClearCart]);
+
   const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
   const toggleSidebar = useCallback(() => setIsSidebarOpen(prev => !prev), []);

@@ -1,5 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Suspense, useEffect } from 'react';
 import Navbar from './components/Navbar';
@@ -10,6 +9,7 @@ import { ErrorBoundary, Loading } from './components/PerformanceOptimization';
 import { ScrollToTop, CookieConsent } from './components/FinalPolish';
 import { registerServiceWorker, generateManifest } from './pwa';
 import { CartProvider } from './context/CartContext';
+import CartSidebar from './components/cart/CartSidebar';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
 import ShopAllPage from './pages/ShopAllPage';
@@ -21,12 +21,36 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import CustomerDashboard from './pages/CustomerDashboard';
 import AdminPanel from './pages/admin/AdminPanel';
+import AdminLogin from './pages/admin/AdminLogin';
 import About from './pages/About';
 import TrackOrder from './pages/TrackOrder';
 import Contact from './pages/Contact';
 import FAQ from './pages/FAQ';
 import SizeGuide from './pages/SizeGuide';
 import { useStore } from './store/useStore';
+
+/**
+ * Storefront Layout:
+ * Wraps customer-facing storefront pages with the main customer Navbar, CartSidebar,
+ * AccessibilityWrapper, Storefront Footer, ScrollToTop, and CookieConsent.
+ * Admin pages are completely excluded from this layout.
+ */
+function StorefrontLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-white flex flex-col font-sans">
+      <Navbar />
+      <CartSidebar />
+      <AccessibilityWrapper>
+        <Suspense fallback={<Loading />}>
+          {children}
+        </Suspense>
+      </AccessibilityWrapper>
+      <Footer />
+      <ScrollToTop />
+      <CookieConsent />
+    </div>
+  );
+}
 
 function App() {
   const user = useStore(state => state.user);
@@ -42,39 +66,58 @@ function App() {
       <ErrorBoundary>
         <SEO />
         <CartProvider>
-          <div className="min-h-screen bg-white flex flex-col">
-            <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
-            <Navbar />
-            <AccessibilityWrapper>
-              <Suspense fallback={<Loading />}>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/shop" element={<Shop />} />
-                  <Route path="/shop-all" element={<ShopAllPage />} />
-                  {/* New URL structure */}
-                  <Route path="/collections/:categorySlug" element={<CollectionPage />} />
-                  <Route path="/products/:productSlug" element={<ProductDetail />} />
-                  {/* Legacy routes for backward compatibility */}
-                  <Route path="/shop/:categorySlug" element={<CollectionPage />} />
-                  <Route path="/product/:id" element={<ProductDetail />} />
-                  <Route path="/cart" element={<Cart />} />
-                  <Route path="/checkout" element={<Checkout />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/dashboard" element={user ? <CustomerDashboard /> : <Login />} />
-                  <Route path="/admin" element={user?.role === 'admin' ? <AdminPanel /> : <Login />} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/track-order" element={<TrackOrder />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/faq" element={<FAQ />} />
-                  <Route path="/size-guide" element={<SizeGuide />} />
-                </Routes>
-              </Suspense>
-            </AccessibilityWrapper>
-            <Footer />
-            <ScrollToTop />
-            <CookieConsent />
-          </div>
+          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <Routes>
+            {/* =================================================================
+                ADMIN PORTAL ROUTES
+                Completely isolated from frontend Navbar, Footer, and CartSidebar.
+                Admin has its own dedicated Admin Navbar, responsive toggleable 
+                Sidebar, and Admin Footer.
+                ================================================================= */}
+            <Route 
+              path="/admin" 
+              element={user?.role === 'admin' ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
+            />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/signin" element={<Navigate to="/admin/login" replace />} />
+
+            {/* =================================================================
+                CUSTOMER STOREFRONT ROUTES
+                Wrapped in StorefrontLayout with customer Navbar and Footer.
+                ================================================================= */}
+            <Route path="/" element={<StorefrontLayout><Home /></StorefrontLayout>} />
+            <Route path="/shop" element={<StorefrontLayout><Shop /></StorefrontLayout>} />
+            <Route path="/shop-all" element={<StorefrontLayout><ShopAllPage /></StorefrontLayout>} />
+            
+            {/* Category and Product Collections */}
+            <Route path="/collections/:categorySlug" element={<StorefrontLayout><CollectionPage /></StorefrontLayout>} />
+            <Route path="/products/:productSlug" element={<StorefrontLayout><ProductDetail /></StorefrontLayout>} />
+            
+            {/* Legacy URL fallbacks for backwards compatibility */}
+            <Route path="/shop/:categorySlug" element={<StorefrontLayout><CollectionPage /></StorefrontLayout>} />
+            <Route path="/product/:id" element={<StorefrontLayout><ProductDetail /></StorefrontLayout>} />
+            
+            {/* Cart, Checkout & Customer Portal */}
+            <Route path="/cart" element={<StorefrontLayout><Cart /></StorefrontLayout>} />
+            <Route path="/checkout" element={<StorefrontLayout><Checkout /></StorefrontLayout>} />
+            <Route path="/login" element={<StorefrontLayout><Login /></StorefrontLayout>} />
+            <Route path="/register" element={<StorefrontLayout><Register /></StorefrontLayout>} />
+            <Route 
+              path="/dashboard" 
+              element={
+                <StorefrontLayout>
+                  {user ? <CustomerDashboard /> : <Login />}
+                </StorefrontLayout>
+              } 
+            />
+            
+            {/* Informational Customer Pages */}
+            <Route path="/about" element={<StorefrontLayout><About /></StorefrontLayout>} />
+            <Route path="/track-order" element={<StorefrontLayout><TrackOrder /></StorefrontLayout>} />
+            <Route path="/contact" element={<StorefrontLayout><Contact /></StorefrontLayout>} />
+            <Route path="/faq" element={<StorefrontLayout><FAQ /></StorefrontLayout>} />
+            <Route path="/size-guide" element={<StorefrontLayout><SizeGuide /></StorefrontLayout>} />
+          </Routes>
         </CartProvider>
       </ErrorBoundary>
     </Router>

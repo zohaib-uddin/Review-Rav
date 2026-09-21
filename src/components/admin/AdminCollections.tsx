@@ -27,7 +27,7 @@ export default function AdminCollections() {
 
   const fetchCollections = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/collections');
+      const response = await fetch('/api/collections');
       const data = await response.json();
       setCollections(data);
     } catch (error) {
@@ -62,17 +62,17 @@ export default function AdminCollections() {
   const handleEdit = (collection: any) => {
     setEditingCollection(collection);
     setFormData({
-      name: collection.name,
-      slug: collection.slug,
+      name: collection.name || '',
+      slug: collection.slug || '',
       description: collection.description || '',
       cover_image_url: collection.cover_image_url || '',
-      show_in_focus: collection.show_in_focus || false,
-      show_explore_banner: collection.show_explore_banner || false,
-      show_on_home_chapter: collection.show_on_home_chapter || false,
+      show_in_focus: Boolean(collection.show_in_focus),
+      show_explore_banner: Boolean(collection.show_explore_banner),
+      show_on_home_chapter: Boolean(collection.show_on_home_chapter),
       chapter_title: collection.chapter_title || '',
       edition_name: collection.edition_name || '',
-      sort_order: collection.sort_order,
-      is_active: collection.is_active,
+      sort_order: Number(collection.sort_order) || 0,
+      is_active: collection.is_active !== undefined ? Boolean(collection.is_active) : true,
     });
     setShowForm(true);
   };

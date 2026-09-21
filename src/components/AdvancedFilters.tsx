@@ -1,91 +1,113 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { useStore } from '../store/useStore';
 
 interface AdvancedFiltersProps {
   onFilterChange: (filters: AdvancedFilterState) => void;
 }
 
 export interface AdvancedFilterState {
-  material: string[];
-  fit: string[];
-  occasion: string[];
-  minRating: number;
-  inStockOnly: boolean;
+  size: string[];
+  color: string[];
+  minPrice?: number;
+  maxPrice?: number;
+  features: string[];
+  categories: string[];
 }
 
-const filterOptions = {
-  material: ['Cotton', 'Polyester', 'Denim', 'Fleece', 'Linen', 'Wool', 'Silk', 'Blend'],
-  fit: ['Oversized', 'Regular', 'Slim', 'Wide Leg', 'Relaxed', 'Tailored'],
-  occasion: ['Casual', 'Formal', 'Streetwear', 'Athletic', 'Party', 'Office', 'Travel'],
-};
-
 export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps) {
+  const { products, categories } = useStore();
+  
   const [filters, setFilters] = useState<AdvancedFilterState>({
-    material: [],
-    fit: [],
-    occasion: [],
-    minRating: 0,
-    inStockOnly: false,
+    size: [],
+    color: [],
+    minPrice: undefined,
+    maxPrice: undefined,
+    features: [],
+    categories: [],
   });
 
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
+  
   const [expandedSections, setExpandedSections] = useState({
-    material: true,
-    fit: true,
-    occasion: true,
-    rating: false,
-    stock: false,
+    categories: true,
+    size: true,
+    color: true,
+    price: true,
+    features: true,
   });
+
+  // Extract unique sizes and colors from products
+  const allSizes = useMemo(() => {
+    const sizes = new Set<string>();
+    products.forEach(p => {
+      if (p.attributes?.sizes) {
+        p.attributes.sizes.forEach((s: string) => sizes.add(s));
+      }
+    });
+    return Array.from(sizes).sort();
+  }, [products]);
+
+  const allColors = useMemo(() => {
+    const colors = new Set<string>();
+    products.forEach(p => {
+      if (p.attributes?.colors) {
+        p.attributes.colors.forEach((c: string) => colors.add(c));
+      }
+    });
+    return Array.from(colors).sort();
+  }, [products]);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const handleCheckboxChange = (category: 'material' | 'fit' | 'occasion', value: string) => {
+  const handleCheckboxChange = (category: keyof AdvancedFilterState, value: string) => {
     const newFilters = { ...filters };
-    if (newFilters[category].includes(value)) {
-      newFilters[category] = newFilters[category].filter(v => v !== value);
+    const arr = newFilters[category] as string[];
+    if (arr.includes(value)) {
+      newFilters[category] = arr.filter(v => v !== value);
     } else {
-      newFilters[category] = [...newFilters[category], value];
+      newFilters[category] = [...arr, value];
     }
     setFilters(newFilters);
     onFilterChange(newFilters);
   };
 
-  const handleRatingChange = (rating: number) => {
-    const newFilters = { ...filters, minRating: rating };
-    setFilters(newFilters);
-    onFilterChange(newFilters);
-  };
-
-  const handleStockChange = (checked: boolean) => {
-    const newFilters = { ...filters, inStockOnly: checked };
+  const handlePriceChange = (type: 'min' | 'max', value: number) => {
+    const newFilters = { 
+      ...filters, 
+      [type === 'min' ? 'minPrice' : 'maxPrice']: value 
+    };
     setFilters(newFilters);
     onFilterChange(newFilters);
   };
 
   const clearAllFilters = () => {
     const clearedFilters: AdvancedFilterState = {
-      material: [],
-      fit: [],
-      occasion: [],
-      minRating: 0,
-      inStockOnly: false,
+      size: [],
+      color: [],
+      minPrice: undefined,
+      maxPrice: undefined,
+      features: [],
+      categories: [],
     };
     setFilters(clearedFilters);
     onFilterChange(clearedFilters);
   };
 
-  const hasActiveFilters = filters.material.length > 0 || 
-                          filters.fit.length > 0 || 
-                          filters.occasion.length > 0 || 
-                          filters.minRating > 0 || 
-                          filters.inStockOnly;
+  const hasActiveFilters = filters.size.length > 0 || 
+                          filters.color.length > 0 || 
+                          filters.minPrice !== undefined || 
+                          filters.maxPrice !== undefined ||
+                          filters.features.length > 0 ||
+                          filters.categories.length > 0;
 
   return (
-    <div className="bg-white rounded-xl p-6 sticky top-24">
+    <div className="bg-white rounded-none p-6 sticky top-24 border">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-bold">Advanced Filters</h3>
+        <h3 className="text-lg font-bold">Filters</h3>
         {hasActiveFilters && (
           <button
             onClick={clearAllFilters}
@@ -96,75 +118,32 @@ export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps
         )}
       </div>
 
-      {/* Active Filters Display */}
-      {hasActiveFilters && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <p className="text-xs text-gray-500 mb-2">Active Filters:</p>
-          <div className="flex flex-wrap gap-2">
-            {filters.material.map(m => (
-              <span key={m} className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full flex items-center gap-1">
-                {m}
-                <button onClick={() => handleCheckboxChange('material', m)}>
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-            {filters.fit.map(f => (
-              <span key={f} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full flex items-center gap-1">
-                {f}
-                <button onClick={() => handleCheckboxChange('fit', f)}>
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-            {filters.occasion.map(o => (
-              <span key={o} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex items-center gap-1">
-                {o}
-                <button onClick={() => handleCheckboxChange('occasion', o)}>
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-            {filters.minRating > 0 && (
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
-                {filters.minRating}+ Stars
-              </span>
-            )}
-            {filters.inStockOnly && (
-              <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full">
-                In Stock Only
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Material Filter */}
+      {/* Categories Filter */}
       <div className="mb-6">
         <button
-          onClick={() => toggleSection('material')}
+          onClick={() => toggleSection('categories')}
           className="flex items-center justify-between w-full mb-3"
         >
-          <span className="font-medium">Material</span>
-          {expandedSections.material ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <span className="font-medium">Categories</span>
+          {expandedSections.categories ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         <AnimatePresence>
-          {expandedSections.material && (
+          {expandedSections.categories && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="space-y-2"
             >
-              {filterOptions.material.map(material => (
-                <label key={material} className="flex items-center gap-2 cursor-pointer">
+              {categories.map(cat => (
+                <label key={cat.id} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={filters.material.includes(material)}
-                    onChange={() => handleCheckboxChange('material', material)}
-                    className="w-4 h-4 rounded"
+                    checked={filters.categories.includes(cat.slug)}
+                    onChange={() => handleCheckboxChange('categories', cat.slug)}
+                    className="w-4 h-4 rounded-none"
                   />
-                  <span className="text-sm">{material}</span>
+                  <span className="text-sm">{cat.name}</span>
                 </label>
               ))}
             </motion.div>
@@ -172,32 +151,32 @@ export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps
         </AnimatePresence>
       </div>
 
-      {/* Fit Filter */}
+      {/* Size Filter */}
       <div className="mb-6">
         <button
-          onClick={() => toggleSection('fit')}
+          onClick={() => toggleSection('size')}
           className="flex items-center justify-between w-full mb-3"
         >
-          <span className="font-medium">Fit</span>
-          {expandedSections.fit ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <span className="font-medium">Size</span>
+          {expandedSections.size ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         <AnimatePresence>
-          {expandedSections.fit && (
+          {expandedSections.size && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="space-y-2"
             >
-              {filterOptions.fit.map(fit => (
-                <label key={fit} className="flex items-center gap-2 cursor-pointer">
+              {allSizes.map(size => (
+                <label key={size} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={filters.fit.includes(fit)}
-                    onChange={() => handleCheckboxChange('fit', fit)}
-                    className="w-4 h-4 rounded"
+                    checked={filters.size.includes(size)}
+                    onChange={() => handleCheckboxChange('size', size)}
+                    className="w-4 h-4 rounded-none"
                   />
-                  <span className="text-sm">{fit}</span>
+                  <span className="text-sm">{size}</span>
                 </label>
               ))}
             </motion.div>
@@ -205,32 +184,38 @@ export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps
         </AnimatePresence>
       </div>
 
-      {/* Occasion Filter */}
+      {/* Color Filter */}
       <div className="mb-6">
         <button
-          onClick={() => toggleSection('occasion')}
+          onClick={() => toggleSection('color')}
           className="flex items-center justify-between w-full mb-3"
         >
-          <span className="font-medium">Occasion</span>
-          {expandedSections.occasion ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <span className="font-medium">Color</span>
+          {expandedSections.color ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         <AnimatePresence>
-          {expandedSections.occasion && (
+          {expandedSections.color && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="space-y-2"
             >
-              {filterOptions.occasion.map(occasion => (
-                <label key={occasion} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.occasion.includes(occasion)}
-                    onChange={() => handleCheckboxChange('occasion', occasion)}
-                    className="w-4 h-4 rounded"
-                  />
-                  <span className="text-sm">{occasion}</span>
+              {allColors.map(color => (
+                <label key={color} className="flex items-center gap-2 cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-4 h-4 rounded-none border border-gray-300"
+                      style={{ backgroundColor: color.toLowerCase() }}
+                    />
+                    <input
+                      type="checkbox"
+                      checked={filters.color.includes(color)}
+                      onChange={() => handleCheckboxChange('color', color)}
+                      className="w-4 h-4 rounded-none sr-only"
+                    />
+                    <span className="text-sm">{color}</span>
+                  </div>
                 </label>
               ))}
             </motion.div>
@@ -238,74 +223,100 @@ export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps
         </AnimatePresence>
       </div>
 
-      {/* Rating Filter */}
+      {/* Price Range Filter */}
       <div className="mb-6">
         <button
-          onClick={() => toggleSection('rating')}
+          onClick={() => toggleSection('price')}
           className="flex items-center justify-between w-full mb-3"
         >
-          <span className="font-medium">Minimum Rating</span>
-          {expandedSections.rating ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <span className="font-medium">Price Range</span>
+          {expandedSections.price ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         <AnimatePresence>
-          {expandedSections.rating && (
+          {expandedSections.price && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="space-y-2"
+              className="space-y-4"
             >
-              {[4, 3, 2, 1].map(rating => (
-                <label key={rating} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="rating"
-                    checked={filters.minRating === rating}
-                    onChange={() => handleRatingChange(rating)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm">{rating}+ Stars</span>
-                </label>
-              ))}
-              <label className="flex items-center gap-2 cursor-pointer">
+              <div className="flex items-center gap-2">
                 <input
-                  type="radio"
-                  name="rating"
-                  checked={filters.minRating === 0}
-                  onChange={() => handleRatingChange(0)}
-                  className="w-4 h-4"
+                  type="number"
+                  placeholder="Min"
+                  value={filters.minPrice || ''}
+                  onChange={(e) => handlePriceChange('min', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border rounded-none text-sm"
                 />
-                <span className="text-sm">All Ratings</span>
-              </label>
+                <span>-</span>
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={filters.maxPrice || ''}
+                  onChange={(e) => handlePriceChange('max', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border rounded-none text-sm"
+                />
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="10000"
+                step="100"
+                value={filters.maxPrice || 10000}
+                onChange={(e) => handlePriceChange('max', parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-gray-500">
+                Rs.{filters.minPrice || 0} - Rs.{filters.maxPrice || 10000}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Stock Filter */}
+      {/* Features Filter */}
       <div className="mb-6">
         <button
-          onClick={() => toggleSection('stock')}
+          onClick={() => toggleSection('features')}
           className="flex items-center justify-between w-full mb-3"
         >
-          <span className="font-medium">Stock Status</span>
-          {expandedSections.stock ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <span className="font-medium">Features</span>
+          {expandedSections.features ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         <AnimatePresence>
-          {expandedSections.stock && (
+          {expandedSections.features && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
+              className="space-y-2"
             >
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={filters.inStockOnly}
-                  onChange={(e) => handleStockChange(e.target.checked)}
-                  className="w-4 h-4 rounded"
+                  checked={filters.features.includes('new-arrival')}
+                  onChange={() => handleCheckboxChange('features', 'new-arrival')}
+                  className="w-4 h-4 rounded-none"
                 />
-                <span className="text-sm">In Stock Only</span>
+                <span className="text-sm">New Arrival</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.features.includes('best-seller')}
+                  onChange={() => handleCheckboxChange('features', 'best-seller')}
+                  className="w-4 h-4 rounded-none"
+                />
+                <span className="text-sm">Best Seller</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.features.includes('on-sale')}
+                  onChange={() => handleCheckboxChange('features', 'on-sale')}
+                  className="w-4 h-4 rounded-none"
+                />
+                <span className="text-sm">On Sale</span>
               </label>
             </motion.div>
           )}

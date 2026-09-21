@@ -142,6 +142,9 @@ export interface Category {
   // Collections in Focus fields
   is_featured_in_focus: boolean;
   display_order_in_focus: number;
+  // Warm Chapters fields
+  is_warm_chapter?: boolean;
+  display_order_warm_chapter?: number;
 }
 
 export interface WarmChapter {
@@ -312,14 +315,20 @@ export const useStore = create<StoreState>((set, get) => ({
   fetchFeaturedCategories: async () => {
     try {
       console.log('🔄 Fetching featured categories for Collections in Focus...');
-      const response = await fetch('http://localhost:3001/api/categories/featured-in-focus');
-      const featuredCategories = await response.json();
-      console.log(`✅ Received ${featuredCategories.length} featured categories from API`);
-      set({ featuredCategories, apiAvailable: true });
+      const response = await fetch('/api/categories/featured-in-focus');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const featuredCategories = await response.json();
+        console.log(`✅ Received ${featuredCategories.length} featured categories from API`);
+        set({ featuredCategories, apiAvailable: true });
+      } else {
+        console.warn('Featured categories returned non-JSON response');
+      }
     } catch (error: any) {
-      console.error('❌ Failed to fetch featured categories:', error);
-      console.error('Error details:', error.message);
-      set({ apiAvailable: false });
+      console.warn('⚠️ Could not load featured categories, using store categories:', error.message);
     }
   },
 
@@ -335,14 +344,20 @@ export const useStore = create<StoreState>((set, get) => ({
   fetchWarmChapters: async () => {
     try {
       console.log('🔄 Fetching warm chapters from API...');
-      const response = await fetch('http://localhost:3001/api/warm-chapters');
-      const warmChapters = await response.json();
-      console.log(`✅ Received ${warmChapters.length} warm chapters from API`);
-      set({ warmChapters, apiAvailable: true });
+      const response = await fetch('/api/warm-chapters');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const warmChapters = await response.json();
+        console.log(`✅ Received ${warmChapters.length} warm chapters from API`);
+        set({ warmChapters, apiAvailable: true });
+      } else {
+        console.warn('Warm chapters returned non-JSON response');
+      }
     } catch (error: any) {
-      console.error('❌ Failed to fetch warm chapters:', error);
-      console.error('Error details:', error.message);
-      set({ apiAvailable: false });
+      console.warn('⚠️ Could not load warm chapters, using store categories:', error.message);
     }
   },
   

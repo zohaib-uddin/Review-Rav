@@ -1,6 +1,7 @@
+import { forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, Minus, Plus, Trash2 } from 'lucide-react';
-import { useCart } from '../context/CartContext';
+import { useCart } from '../../context/CartContext';
 import { Link } from 'react-router-dom';
 
 export default function CartSidebar() {
@@ -115,17 +116,17 @@ export default function CartSidebar() {
 }
 
 // Cart Item Component with Sequential Assembly Animation
-function CartItem({ 
-  item, 
-  index, 
-  onRemove, 
-  onUpdateQuantity 
-}: { 
+const CartItem = forwardRef<HTMLDivElement, { 
   item: any; 
   index: number; 
   onRemove: () => void; 
   onUpdateQuantity: (qty: number) => void;
-}) {
+}>(function CartItem({ 
+  item, 
+  index, 
+  onRemove, 
+  onUpdateQuantity 
+}, ref) {
   const product = item.product;
   const imageSrc = product.image_url || product.images?.[0] || product.image;
   const price = product.salePrice || product.price || 0;
@@ -206,6 +207,7 @@ function CartItem({
 
   return (
     <motion.div
+      ref={ref}
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -299,4 +301,4 @@ function CartItem({
       </div>
     </motion.div>
   );
-}
+});

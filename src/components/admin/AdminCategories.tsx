@@ -18,8 +18,11 @@ export default function AdminCategories() {
     sort_order: 0,
     is_featured_in_focus: false,
     display_order_in_focus: 0,
+    is_warm_chapter: false,
+    display_order_warm_chapter: 0,
   });
   const [featuredCount, setFeaturedCount] = useState(0);
+  const [warmCount, setWarmCount] = useState(0);
   const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
@@ -31,6 +34,8 @@ export default function AdminCategories() {
     // Count currently featured categories (excluding the one being edited)
     const currentlyFeatured = categories.filter(c => c.is_featured_in_focus && c.id !== editingCategory?.id);
     setFeaturedCount(currentlyFeatured.length);
+    const currentlyWarm = categories.filter(c => c.is_warm_chapter && c.id !== editingCategory?.id);
+    setWarmCount(currentlyWarm.length);
   }, [categories, editingCategory]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,7 +51,8 @@ export default function AdminCategories() {
     }
 
     try {
-      const response = await fetch(`/api/categories/${editingCategory ? editingCategory.id : 'new'}`, {
+      const url = editingCategory ? `/api/categories/${editingCategory.id}` : '/api/categories';
+      const response = await fetch(url, {
         method: editingCategory ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -57,7 +63,7 @@ export default function AdminCategories() {
         throw new Error(error.message);
       }
 
-      console.log('Submitting category:', formData);
+      const savedCategory = await response.json();
       setShowForm(false);
       setEditingCategory(null);
       setFormData({
@@ -71,9 +77,12 @@ export default function AdminCategories() {
         sort_order: 0,
         is_featured_in_focus: false,
         display_order_in_focus: 0,
+        is_warm_chapter: false,
+        display_order_warm_chapter: 0,
       });
-      fetchCategories();
-      fetchFeaturedCategories();
+      await fetchCategories();
+      await fetchFeaturedCategories();
+      await useStore.getState().fetchWarmChapters();
     } catch (error: any) {
       setValidationError(error.message);
     }
@@ -92,14 +101,26 @@ export default function AdminCategories() {
       sort_order: category.sort_order,
       is_featured_in_focus: category.is_featured_in_focus || false,
       display_order_in_focus: category.display_order_in_focus || 0,
+      is_warm_chapter: category.is_warm_chapter || false,
+      display_order_warm_chapter: category.display_order_warm_chapter || 0,
     });
     setShowForm(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this category?')) {
-      // API call to delete category
-      console.log('Deleting category:', id);
+      try {
+        const response = await fetch(`/api/categories/${id}`, {
+          method: 'DELETE',
+        });
+        if (response.ok) {
+          await fetchCategories();
+          await fetchFeaturedCategories();
+          await useStore.getState().fetchWarmChapters();
+        }
+      } catch (e) {
+        console.error('Delete category error:', e);
+      }
     }
   };
 
@@ -126,6 +147,27 @@ export default function AdminCategories() {
 
       fetchCategories();
       fetchFeaturedCategories();
+    } catch (error: any) {
+      setValidationError(error.message);
+    }
+  };
+
+  const handleToggleWarmChapter = async (category: any, newValue: boolean) => {
+    setValidationError('');
+    try {
+      const response = await fetch(`/api/categories/${category.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_warm_chapter: newValue }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message);
+      }
+
+      fetchCategories();
+      useStore.getState().fetchWarmChapters();
     } catch (error: any) {
       setValidationError(error.message);
     }
@@ -188,50 +230,95 @@ export default function AdminCategories() {
                     )}
                     {category.is_featured_in_focus && (
                       <span className="inline-block mt-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">
-                        ✓ Featured in Focus
+                        ✓ Focus (#{category.display_order_in_focus || 0})
+                      </span>
+                    )}
+                    {category.is_warm_chapter && (
+                      <span className="inline-block mt-1 ml-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-medium">
+                        🔥 Warm Chapter (#{category.display_order_warm_chapter || 0})
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  {/* Featured Toggle */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Featured:</label>
+                <div className="flex items-center gap-4 flex-wrap justify-end">
+                  {/* Featured in Focus Toggle */}
+                  <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-lg border">
+                    <label className="text-xs text-gray-600 font-medium">Focus:</label>
                     <button
                       onClick={() => handleToggleFeatured(category, !category.is_featured_in_focus)}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
+                      className={`relative w-9 h-5 rounded-full transition-colors ${
                         category.is_featured_in_focus ? 'bg-green-600' : 'bg-gray-300'
                       }`}
+                      title="Toggle Collections in Focus"
                     >
                       <div
-                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                          category.is_featured_in_focus ? 'left-7' : 'left-1'
+                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                          category.is_featured_in_focus ? 'left-4.5' : 'left-0.5'
                         }`}
                       />
                     </button>
+                    {category.is_featured_in_focus && (
+                      <input
+                        type="number"
+                        value={category.display_order_in_focus || 0}
+                        onChange={(e) => {
+                          const newOrder = parseInt(e.target.value) || 0;
+                          fetch(`/api/categories/${category.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ display_order_in_focus: newOrder }),
+                          }).then(() => {
+                            fetchCategories();
+                            fetchFeaturedCategories();
+                          });
+                        }}
+                        className="w-12 px-1.5 py-0.5 border rounded text-xs text-center"
+                        min="0"
+                        max="3"
+                        title="Display Order in Focus (0-3)"
+                      />
+                    )}
                   </div>
-                  {/* Display Order Input */}
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">Order:</label>
-                    <input
-                      type="number"
-                      value={category.display_order_in_focus || 0}
-                      onChange={(e) => {
-                        const newOrder = parseInt(e.target.value);
-                        fetch(`/api/categories/${category.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ display_order_in_focus: newOrder }),
-                        }).then(() => {
-                          fetchCategories();
-                          fetchFeaturedCategories();
-                        });
-                      }}
-                      className="w-16 px-2 py-1 border rounded-lg text-sm"
-                      min="0"
-                      max="3"
-                    />
+
+                  {/* Warm Chapter Toggle */}
+                  <div className="flex items-center gap-1.5 bg-amber-50/70 px-2.5 py-1.5 rounded-lg border border-amber-200">
+                    <label className="text-xs text-amber-900 font-medium">Warm:</label>
+                    <button
+                      onClick={() => handleToggleWarmChapter(category, !category.is_warm_chapter)}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${
+                        category.is_warm_chapter ? 'bg-amber-600' : 'bg-gray-300'
+                      }`}
+                      title="Toggle Warm Chapter (Homepage)"
+                    >
+                      <div
+                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                          category.is_warm_chapter ? 'left-4.5' : 'left-0.5'
+                        }`}
+                      />
+                    </button>
+                    {category.is_warm_chapter && (
+                      <input
+                        type="number"
+                        value={category.display_order_warm_chapter || 0}
+                        onChange={(e) => {
+                          const newOrder = parseInt(e.target.value) || 0;
+                          fetch(`/api/categories/${category.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ display_order_warm_chapter: newOrder }),
+                          }).then(() => {
+                            fetchCategories();
+                            useStore.getState().fetchWarmChapters();
+                          });
+                        }}
+                        className="w-12 px-1.5 py-0.5 border rounded text-xs text-center border-amber-300"
+                        min="0"
+                        max="9"
+                        title="Warm Chapter Display Order"
+                      />
+                    )}
                   </div>
+
                   <button
                     onClick={() => handleEdit(category)}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -471,6 +558,43 @@ export default function AdminCategories() {
                       className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
                     />
                     <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the grid</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Warm Chapters Section */}
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <span>🔥 Warm Chapters Settings (Homepage)</span>
+                </h4>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                  <p className="text-sm text-amber-800">
+                    Active Warm Chapters: <strong>{warmCount}</strong>. Enabling this shows this category in the dynamic "Warm Chapter" carousel on the homepage.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_warm_chapter}
+                      onChange={e => setFormData({ ...formData, is_warm_chapter: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    <span className="text-sm font-medium">Feature in "Warm Chapters" homepage carousel</span>
+                  </label>
+                </div>
+                {formData.is_warm_chapter && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Display Order (0-9)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="9"
+                      value={formData.display_order_warm_chapter}
+                      onChange={e => setFormData({ ...formData, display_order_warm_chapter: Number(e.target.value) })}
+                      className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the carousel</p>
                   </div>
                 )}
               </div>

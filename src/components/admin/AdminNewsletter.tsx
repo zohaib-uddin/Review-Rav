@@ -10,9 +10,13 @@ export default function AdminNewsletter() {
 
   const fetchSubscribers = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/newsletter');
-      const data = await response.json();
-      setSubscribers(data);
+      const response = await fetch('/api/newsletter');
+      if (response.ok) {
+        const data = await response.json();
+        setSubscribers(Array.isArray(data) ? data : []);
+      } else {
+        console.warn('Newsletter API returned non-OK status:', response.status);
+      }
     } catch (error) {
       console.error('Failed to fetch subscribers:', error);
     }
@@ -127,3 +131,4 @@ export default function AdminNewsletter() {
     </div>
   );
 }
+  

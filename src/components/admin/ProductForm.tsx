@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { X, Plus, Trash2, Save, ChevronLeft, ChevronRight, Package, Tag, Image, Palette, Ruler, FileText } from 'lucide-react';
+import { X, Plus, Trash2, Save, ChevronLeft, ChevronRight, Package, Tag, Image, Palette, Ruler, FileText, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useStore, Product } from '../../store/useStore';
+import api from '../../services/api';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -18,25 +19,38 @@ const steps = [
 ];
 
 export default function ProductForm({ product, onClose }: ProductFormProps) {
-  const { addProduct, updateProduct, categories } = useStore();
+  const { addProduct, updateProduct, categories, fetchProducts } = useStore();
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const getInitialImages = (p?: Product | null) => {
+    if (!p) return [];
+    if (Array.isArray(p.images) && p.images.length > 0) return p.images;
+    if (p.image_url) return [p.image_url];
+    if (p.image) return [p.image];
+    return [];
+  };
+
   const [formData, setFormData] = useState({
     name: product?.name || '',
     slug: product?.slug || '',
     description: product?.description || '',
-    base_price: product?.base_price || 0,
-    compare_at_price: product?.compare_at_price || null as number | null,
+    base_price: product?.base_price || product?.price || 0,
+    compare_at_price: product?.compare_at_price || product?.salePrice || null as number | null,
     category_id: product?.category_id || '',
-    category_slug: product?.category_slug || '',
+    subcategory_id: (product as any)?.subcategory_id || '',
+    category_slug: product?.category_slug || product?.category || '',
     brand: product?.brand || 'RAVENZA',
     fabric: product?.fabric || '',
     fit: product?.fit || '',
     sku: product?.sku || '',
-    is_new_arrival: product?.is_new_arrival || false,
-    is_best_seller: product?.is_best_seller || false,
-    is_featured: product?.is_featured || false,
+    is_new_arrival: Boolean(product?.is_new_arrival ?? product?.isNew),
+    is_best_seller: Boolean(product?.is_best_seller ?? (product as any)?.is_bestseller ?? product?.isBestseller),
+    is_featured: Boolean(product?.is_featured ?? product?.isFeatured),
     badge: product?.badge || '',
-    images: product?.images || [],
+    images: getInitialImages(product),
     attributes: product?.attributes || { sizes: ['S', 'M', 'L', 'XL'], colors: ['Black'] },
     fabric_composition: product?.fabric_composition || '',
     fabric_finish: product?.fabric_finish || '',
@@ -52,11 +66,82 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     is_draft: product?.is_draft || false,
   });
 
+  const [sizeGuideEnabled, setSizeGuideEnabled] = useState<boolean>(
+    Boolean((product as any)?.size_guide_enabled || (product as any)?.size_guide?.enabled)
+  );
+
+  const [sizeGuideChart, setSizeGuideChart] = useState<any[]>(
+    Array.isArray((product as any)?.size_guide?.chart) && (product as any).size_guide.chart.length > 0
+      ? (product as any).size_guide.chart
+      : [
+          { size: 'S', chest: '40"', length: '28"', shoulder: '19"', sleeve: '8.5"' },
+          { size: 'M', chest: '42"', length: '29"', shoulder: '20"', sleeve: '9.0"' },
+          { size: 'L', chest: '44"', length: '30"', shoulder: '21"', sleeve: '9.5"' },
+          { size: 'XL', chest: '46"', length: '31"', shoulder: '22"', sleeve: '10.0"' },
+          { size: 'XXL', chest: '48"', length: '32"', shoulder: '23"', sleeve: '10.5"' },
+        ]
+  );
+
+  const [batchSizePrices, setBatchSizePrices] = useState<Record<string, number | string>>({});
+
+  // Sync state when editing product changes
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        name: product.name || '',
+        slug: product.slug || '',
+        description: product.description || '',
+        base_price: product.base_price || product.price || 0,
+        compare_at_price: product.compare_at_price || product.salePrice || null,
+        category_id: product.category_id || categories.find(c => c.slug === (product.category_slug || product.category))?.id || '',
+        subcategory_id: (product as any).subcategory_id || '',
+        category_slug: product.category_slug || product.category || '',
+        brand: product.brand || 'RAVENZA',
+        fabric: product.fabric || '',
+        fit: product.fit || '',
+        sku: product.sku || '',
+        is_new_arrival: Boolean(product.is_new_arrival ?? product.isNew),
+        is_best_seller: Boolean(product.is_best_seller ?? (product as any)?.is_bestseller ?? product.isBestseller),
+        is_featured: Boolean(product.is_featured ?? product.isFeatured),
+        badge: product.badge || '',
+        images: getInitialImages(product),
+        attributes: product.attributes || { sizes: product.sizes || ['S', 'M', 'L', 'XL'], colors: product.colors || ['Black'] },
+        fabric_composition: product.fabric_composition || '',
+        fabric_finish: product.fabric_finish || '',
+        graphic_print: product.graphic_print || '',
+        garment_specs: product.garment_specs || '',
+        garment_care: product.garment_care || '',
+        shipping_delivery: product.shipping_delivery || 'Free shipping above Rs.3000',
+        model_size: product.model_size || '',
+        meta_title: product.meta_title || '',
+        meta_description: product.meta_description || '',
+        focus_keywords: product.focus_keywords || '',
+        status: product.status || 'active',
+        is_draft: product.is_draft || false,
+      });
+
+      setSizeGuideEnabled(Boolean((product as any).size_guide_enabled || (product as any).size_guide?.enabled));
+      if (Array.isArray((product as any).size_guide?.chart) && (product as any).size_guide.chart.length > 0) {
+        setSizeGuideChart((product as any).size_guide.chart);
+      }
+
+      if (product.variants_matrix && Array.isArray(product.variants_matrix) && product.variants_matrix.length > 0) {
+        setVariants(product.variants_matrix);
+        variantsInitializedRef.current = true;
+      }
+    }
+  }, [product, categories]);
+
   const [newSize, setNewSize] = useState('');
   const [newColor, setNewColor] = useState('');
   const [newColorHex, setNewColorHex] = useState('#000000');
   const [imageUrl, setImageUrl] = useState('');
-  const [variants, setVariants] = useState<any[]>([]);
+  const [variants, setVariants] = useState<any[]>(
+    product?.variants_matrix && Array.isArray(product.variants_matrix) ? product.variants_matrix : []
+  );
+  const variantsRef = useRef<any[]>(variants);
+  variantsRef.current = variants;
+  const variantsInitializedRef = useRef(Boolean(product?.variants_matrix && product.variants_matrix.length > 0));
   const [additionalSpecs, setAdditionalSpecs] = useState<{key: string; value: string}[]>([]);
 
   const update = (field: string, value: any) => {
@@ -116,17 +201,42 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     update('images', formData.images.filter((_, i) => i !== index));
   };
 
-  // Auto-generate variants matrix when sizes or colors change
+  // Auto-generate variants matrix when sizes or colors change, but preserve user inputs
   useEffect(() => {
     const sizes = formData.attributes.sizes || [];
     const colors = formData.attributes.colors || [];
     
     if (sizes.length > 0 && colors.length > 0) {
+      const currentList = variantsRef.current || [];
+      // If already initialized with valid variants for this combination, keep existing values
+      if (variantsInitializedRef.current && currentList.length > 0) {
+        const updatedList: any[] = [];
+        sizes.forEach((size: string) => {
+          colors.forEach((color: any) => {
+            const colorName = typeof color === 'string' ? color : color.name;
+            const existing = currentList.find((v: any) => v.size === size && v.color === colorName);
+            if (existing) {
+              updatedList.push(existing);
+            } else {
+              updatedList.push({
+                size,
+                color: colorName,
+                price: (size === sizes[0] ? formData.base_price : null),
+                stock: 0,
+                sku: `${formData.sku || 'RVZ'}-${size}-${colorName.replace(/\s+/g, '-').toUpperCase()}`
+              });
+            }
+          });
+        });
+        setVariants(updatedList);
+        return;
+      }
+
       const newVariants: any[] = [];
       sizes.forEach((size: string) => {
         colors.forEach((color: any) => {
           const colorName = typeof color === 'string' ? color : color.name;
-          const existingVariant = variants.find(v => v.size === size && v.color === colorName);
+          const existingVariant = currentList.find((v: any) => v.size === size && v.color === colorName);
           
           newVariants.push({
             size,
@@ -138,13 +248,88 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         });
       });
       setVariants(newVariants);
+      variantsInitializedRef.current = true;
     } else {
       setVariants([]);
     }
-  }, [formData.attributes.sizes, formData.attributes.colors, formData.base_price, formData.sku]);
+  }, [formData.attributes.sizes, formData.attributes.colors]);
 
   // Calculate total stock
   const totalStock = variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+
+  // Manual trigger to auto-generate or refresh variants matrix
+  const handleAutoGenerateMatrix = () => {
+    const sizes = formData.attributes.sizes || [];
+    const colors = formData.attributes.colors || [];
+    if (sizes.length === 0 || colors.length === 0) return;
+
+    const newVariants: any[] = [];
+    sizes.forEach((size: string) => {
+      colors.forEach((color: any) => {
+        const colorName = typeof color === 'string' ? color : color.name;
+        const existingVariant = variants.find(v => v.size === size && v.color === colorName);
+        const sizePrice = batchSizePrices[size] ? Number(batchSizePrices[size]) : null;
+
+        newVariants.push({
+          size,
+          color: colorName,
+          price: existingVariant?.price || sizePrice || (size === sizes[0] ? formData.base_price : null),
+          stock: existingVariant?.stock || 0,
+          sku: `${formData.sku || 'RVZ'}-${size}-${colorName.replace(/\s+/g, '-').toUpperCase()}`
+        });
+      });
+    });
+    setVariants(newVariants);
+  };
+
+  // Apply batch price to a specific size
+  const applyPriceToSize = (size: string, price: number) => {
+    setVariants(prev => prev.map(v => v.size === size ? { ...v, price: price > 0 ? price : null } : v));
+  };
+
+  // Apply all batch size prices to variants
+  const applyAllBatchSizePrices = () => {
+    setVariants(prev => prev.map(v => {
+      if (batchSizePrices[v.size] && Number(batchSizePrices[v.size]) > 0) {
+        return { ...v, price: Number(batchSizePrices[v.size]) };
+      }
+      return v;
+    }));
+  };
+
+  // Reset all variants to base price
+  const resetAllToBasePrice = () => {
+    setVariants(prev => prev.map(v => ({ ...v, price: formData.base_price })));
+  };
+
+  // Load Size Guide Presets
+  const loadSizeGuidePreset = (type: 'tshirt' | 'hoodie' | 'pants') => {
+    if (type === 'tshirt') {
+      setSizeGuideChart([
+        { size: 'S', chest: '40"', length: '28"', shoulder: '19"', sleeve: '8.5"' },
+        { size: 'M', chest: '42"', length: '29"', shoulder: '20"', sleeve: '9.0"' },
+        { size: 'L', chest: '44"', length: '30"', shoulder: '21"', sleeve: '9.5"' },
+        { size: 'XL', chest: '46"', length: '31"', shoulder: '22"', sleeve: '10.0"' },
+        { size: 'XXL', chest: '48"', length: '32"', shoulder: '23"', sleeve: '10.5"' },
+      ]);
+    } else if (type === 'hoodie') {
+      setSizeGuideChart([
+        { size: 'S', chest: '44"', length: '27"', shoulder: '20"', sleeve: '24"' },
+        { size: 'M', chest: '46"', length: '28"', shoulder: '21"', sleeve: '24.5"' },
+        { size: 'L', chest: '48"', length: '29"', shoulder: '22"', sleeve: '25"' },
+        { size: 'XL', chest: '50"', length: '30"', shoulder: '23"', sleeve: '25.5"' },
+        { size: 'XXL', chest: '52"', length: '31"', shoulder: '24"', sleeve: '26"' },
+      ]);
+    } else if (type === 'pants') {
+      setSizeGuideChart([
+        { size: 'S', chest: '28-30" waist', length: '39"', shoulder: '40" hip', sleeve: '24" thigh' },
+        { size: 'M', chest: '31-33" waist', length: '40"', shoulder: '42" hip', sleeve: '25" thigh' },
+        { size: 'L', chest: '34-36" waist', length: '41"', shoulder: '44" hip', sleeve: '26" thigh' },
+        { size: 'XL', chest: '37-39" waist', length: '42"', shoulder: '46" hip', sleeve: '27" thigh' },
+        { size: 'XXL', chest: '40-42" waist', length: '43"', shoulder: '48" hip', sleeve: '28" thigh' },
+      ]);
+    }
+  };
 
   // Update variant
   const updateVariant = (index: number, field: string, value: any) => {
@@ -170,7 +355,22 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     setAdditionalSpecs(additionalSpecs.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!formData.name || formData.base_price <= 0) {
+      setSubmitError('Please enter a product name and base price');
+      setCurrentStep(1);
+      return;
+    }
+
+    if (!formData.category_id && !formData.category_slug) {
+      setSubmitError('Main category is required');
+      setCurrentStep(2);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
     // Calculate total stock from variants
     const totalStockCount = variants.reduce((sum, v) => sum + (v.stock || 0), 0);
     
@@ -188,17 +388,20 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       'Made in Pakistan'
     ].filter(Boolean) as string[];
 
+    const finalSlug = formData.slug || formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `prod-${Date.now()}`;
+
     const productData: Product = {
       id: product?.id || Date.now().toString(),
       name: formData.name,
-      slug: formData.slug,
+      slug: finalSlug,
       description: formData.description,
-      base_price: formData.base_price,
-      compare_at_price: formData.compare_at_price,
+      base_price: Number(formData.base_price),
+      compare_at_price: formData.compare_at_price ? Number(formData.compare_at_price) : null,
       is_active: !formData.is_draft,
       category_id: formData.category_id || null,
+      subcategory_id: formData.subcategory_id || null,
       category_slug: formData.category_slug,
-      brand: formData.brand,
+      brand: formData.brand || 'RAVENZA',
       fabric: formData.fabric,
       fit: formData.fit,
       sku: formData.sku,
@@ -210,9 +413,15 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       image_url: formData.images[0] || '',
       attributes: {
         sizes: formData.attributes.sizes,
-        colors: formData.attributes.colors, // Keep full color objects with hex
+        colors: formData.attributes.colors,
       },
-      variants_matrix: variants, // Store variants matrix
+      variants_matrix: variants,
+      size_guide_enabled: sizeGuideEnabled,
+      size_guide: sizeGuideEnabled ? {
+        enabled: true,
+        unit: 'inches',
+        chart: sizeGuideChart,
+      } : null,
       fabric_composition: formData.fabric_composition,
       fabric_finish: formData.fabric_finish,
       graphic_print: formData.graphic_print,
@@ -228,11 +437,11 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       is_draft: formData.is_draft,
       created_at: product?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      price: formData.base_price,
-      salePrice: formData.compare_at_price || undefined,
+      price: Number(formData.base_price),
+      salePrice: formData.compare_at_price ? Number(formData.compare_at_price) : undefined,
       image: formData.images[0] || '',
       sizes: formData.attributes.sizes,
-      colors: colorNames, // Simple color names for frontend
+      colors: colorNames,
       stockCount: totalStockCount || 50,
       inStock: totalStockCount > 0,
       isNew: formData.is_new_arrival,
@@ -243,18 +452,35 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       category: formData.category_slug,
     };
 
-    if (product) {
-      updateProduct(product.id, productData);
-    } else {
-      addProduct(productData);
+    try {
+      if (product) {
+        const res = await api.updateProduct(product.id, productData);
+        updateProduct(product.id, res || productData);
+      } else {
+        const saved = await api.createProduct(productData);
+        if (saved && saved.id) {
+          addProduct({ ...productData, id: saved.id, ...saved });
+        } else {
+          addProduct(productData);
+        }
+      }
+      await fetchProducts();
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 400);
+    } catch (err: any) {
+      console.error('Save product error:', err);
+      setSubmitError(err.message || 'Failed to save product in Neon DB');
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
   const canProceed = () => {
     switch (currentStep) {
       case 1: return formData.name && formData.base_price > 0;
-      case 2: return formData.category_slug;
+      case 2: return formData.category_slug || formData.category_id;
       case 3: return formData.images.length > 0;
       case 4: return formData.attributes.sizes.length > 0 && formData.attributes.colors.length > 0;
       case 5: return true;
@@ -270,18 +496,77 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="relative bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
+        className="relative bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b bg-gray-50">
-          <div>
-            <h2 className="text-xl font-bold">{product ? 'Edit Product' : 'Add New Product'}</h2>
-            <p className="text-sm text-gray-500">Step {currentStep} of 6: {steps[currentStep - 1].title}</p>
+        <div className="flex items-center justify-between p-5 border-b bg-gray-50/90 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${product ? 'bg-amber-100 text-amber-700' : 'bg-black text-white'}`}>
+              <Package size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-gray-900">
+                  {product ? `Update Product: ${formData.name || 'Product'}` : 'Add New Product'}
+                </h2>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  product ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                }`}>
+                  {product ? 'Neon DB Update' : 'New Entry'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Step {currentStep} of 6: {steps[currentStep - 1].title} — {steps[currentStep - 1].description}
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-            <X size={20} />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Quick Save button directly in header if basic details entered */}
+            {formData.name && formData.base_price > 0 && (
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50"
+                title="Quick Save to Neon DB without going through all steps"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : submitSuccess ? (
+                  <>
+                    <CheckCircle2 size={13} className="text-green-400" />
+                    <span>Saved!</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={13} />
+                    <span>Quick Save</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+              <X size={18} />
+            </button>
+          </div>
         </div>
+
+        {/* Error Alert */}
+        {submitError && (
+          <div className="mx-6 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-red-700 text-xs shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0 text-red-500" />
+              <span>{submitError}</span>
+            </div>
+            <button onClick={() => setSubmitError(null)} className="text-red-500 hover:text-red-700">
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Step Indicator */}
         <div className="px-6 py-4 border-b bg-white">
@@ -361,42 +646,135 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
           )}
 
           {/* Step 2: Category */}
-          {currentStep === 2 && (
-            <div className="space-y-5">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Tag size={20} /> Category & Collection</h3>
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Category *</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {categories.map(cat => (
-                    <button
-                      key={cat.slug}
-                      onClick={() => { update('category_slug', cat.slug); update('category_id', cat.id); }}
-                      className={`p-4 border-2 rounded-xl text-left transition-all ${
-                        formData.category_slug === cat.slug ? 'border-black bg-black text-white' : 'border-gray-200 hover:border-black'
-                      }`}
+          {currentStep === 2 && (() => {
+            const mainCategories = categories.filter(c => !c.parent_id);
+            const subCategories = formData.category_id
+              ? categories.filter(c => c.parent_id === formData.category_id)
+              : [];
+
+            return (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2"><Tag size={20} /> Category & Classification</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Select the mandatory Main Category and optionally select a dependent Subcategory.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                  {/* Dependent Dropdown 1: Main Category (Required) */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-800">
+                      Main Category <span className="text-red-600">* (Required)</span>
+                    </label>
+                    <select
+                      value={formData.category_id || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const cat = categories.find(c => c.id === selectedId);
+                        if (cat) {
+                          update('category_id', cat.id);
+                          update('category_slug', cat.slug);
+                          update('subcategory_id', '');
+                        } else {
+                          update('category_id', '');
+                          update('category_slug', '');
+                          update('subcategory_id', '');
+                        }
+                      }}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-black text-sm bg-white font-medium transition-colors"
+                      required
                     >
-                      <p className="font-medium text-sm">{cat.name}</p>
-                      {cat.tag && <span className="text-[10px] opacity-70">{cat.tag}</span>}
-                    </button>
-                  ))}
+                      <option value="">-- Choose Main Category (Required) --</option>
+                      {mainCategories.map(cat => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name} {cat.tag ? `[${cat.tag}]` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-gray-500">
+                      Primary storefront department (e.g., Oversize T-Shirts, Hoodies).
+                    </p>
+                  </div>
+
+                  {/* Dependent Dropdown 2: Subcategory */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-800">
+                      Subcategory <span className="text-gray-400 font-normal text-[10px]">(Dependent / Optional)</span>
+                    </label>
+                    <select
+                      value={formData.subcategory_id || ''}
+                      disabled={!formData.category_id}
+                      onChange={(e) => update('subcategory_id', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-black text-sm bg-white font-medium transition-colors disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
+                    >
+                      <option value="">
+                        {!formData.category_id 
+                          ? '-- Select Main Category First --'
+                          : subCategories.length === 0
+                            ? '-- No Subcategories under this category --'
+                            : '-- Select Subcategory (Optional) --'}
+                      </option>
+                      {subCategories.map(sub => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-gray-500">
+                      Sub-classification (e.g. Acid Wash, Heavyweight).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Select Buttons for Main Categories */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
+                    Quick Pick Main Category
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                    {mainCategories.map(cat => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          update('category_id', cat.id);
+                          update('category_slug', cat.slug);
+                          update('subcategory_id', '');
+                        }}
+                        className={`p-3 border-2 rounded-xl text-left transition-all text-xs flex flex-col justify-between ${
+                          formData.category_id === cat.id
+                            ? 'border-black bg-black text-white shadow-sm font-bold'
+                            : 'border-gray-200 hover:border-black bg-white text-gray-800'
+                        }`}
+                      >
+                        <span className="truncate">{cat.name}</span>
+                        {cat.tag && (
+                          <span className={`text-[10px] mt-1 ${formData.category_id === cat.id ? 'text-gray-300' : 'text-gray-400'}`}>
+                            {cat.tag}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Collection Flags */}
+                <div className="pt-4 border-t border-gray-100 flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2.5 cursor-pointer bg-gray-50 px-3.5 py-2 rounded-xl border border-gray-200 hover:border-gray-300">
+                    <input type="checkbox" checked={formData.is_new_arrival} onChange={e => update('is_new_arrival', e.target.checked)} className="w-4 h-4 rounded accent-black" />
+                    <span className="text-xs font-semibold">New Arrival</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer bg-gray-50 px-3.5 py-2 rounded-xl border border-gray-200 hover:border-gray-300">
+                    <input type="checkbox" checked={formData.is_best_seller} onChange={e => update('is_best_seller', e.target.checked)} className="w-4 h-4 rounded accent-black" />
+                    <span className="text-xs font-semibold">Best Seller</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer bg-gray-50 px-3.5 py-2 rounded-xl border border-gray-200 hover:border-gray-300">
+                    <input type="checkbox" checked={formData.is_featured} onChange={e => update('is_featured', e.target.checked)} className="w-4 h-4 rounded accent-black" />
+                    <span className="text-xs font-semibold">Featured Drop</span>
+                  </label>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={formData.is_new_arrival} onChange={e => update('is_new_arrival', e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-sm">New Arrival</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={formData.is_best_seller} onChange={e => update('is_best_seller', e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-sm">Best Seller</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={formData.is_featured} onChange={e => update('is_featured', e.target.checked)} className="w-4 h-4 rounded" />
-                  <span className="text-sm">Featured</span>
-                </label>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Steps 3-6 simplified for brevity */}
           {currentStep === 3 && (
@@ -430,12 +808,25 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
           )}
 
           {currentStep === 4 && (
-            <div className="space-y-5">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Palette size={20} /> Sizes & Colors</h3>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2"><Palette size={20} /> Sizes, Colors & Variant Pricing</h3>
+                  <p className="text-xs text-gray-500">Configure size and color options, auto-generate matrix, and set size-specific prices.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoGenerateMatrix}
+                  className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <RefreshCw size={13} />
+                  <span>Auto-Generate Matrix</span>
+                </button>
+              </div>
               
               {/* Sizes Section */}
               <div>
-                <label className="block text-sm font-medium mb-2">Sizes</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">Sizes</label>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {formData.attributes.sizes.map(size => (
                     <span key={size} className="flex items-center gap-1 bg-black text-white px-3 py-1.5 rounded-full text-xs font-medium">
@@ -452,7 +843,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
 
               {/* Colors Section with Color Picker */}
               <div>
-                <label className="block text-sm font-medium mb-2">Colors</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">Colors</label>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {(formData.attributes.colors || []).map((color: any, idx: number) => {
                     const colorName = typeof color === 'string' ? color : color.name;
@@ -460,10 +851,10 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                     return (
                       <span 
                         key={idx} 
-                        className="flex items-center gap-2 bg-purple-600 text-white px-3 py-1.5 rounded-full text-xs font-medium"
+                        className="flex items-center gap-2 bg-black text-white px-3 py-1.5 rounded-full text-xs font-medium"
                       >
                         <span 
-                          className="w-4 h-4 rounded-full border border-white" 
+                          className="w-3.5 h-3.5 rounded-full border border-white" 
                           style={{ backgroundColor: colorHex }}
                         />
                         {colorName}
@@ -492,54 +883,109 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                 </div>
               </div>
 
+              {/* Size-Level Pricing Control */}
+              {formData.attributes.sizes.length > 0 && (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900">Set Size-Specific Prices</h4>
+                      <p className="text-[11px] text-gray-500">Quickly apply custom prices to all variants belonging to a specific size.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetAllToBasePrice}
+                      className="text-[11px] font-semibold text-gray-600 hover:text-black underline"
+                    >
+                      Reset All to Base Price (Rs. {formData.base_price})
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {formData.attributes.sizes.map(size => (
+                      <div key={size} className="bg-white p-2.5 rounded-lg border border-gray-200 flex flex-col gap-1.5">
+                        <span className="text-xs font-bold text-gray-800">Size: {size}</span>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            placeholder={`Rs. ${formData.base_price}`}
+                            value={batchSizePrices[size] !== undefined ? batchSizePrices[size] : ''}
+                            onChange={(e) => setBatchSizePrices({ ...batchSizePrices, [size]: e.target.value })}
+                            className="w-full px-2 py-1 border rounded text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const p = Number(batchSizePrices[size]) || formData.base_price;
+                              applyPriceToSize(size, p);
+                            }}
+                            className="px-2 py-1 bg-black text-white rounded text-[10px] font-bold shrink-0 hover:bg-gray-800"
+                            title="Apply to this size in matrix"
+                          >
+                            Set
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {Object.keys(batchSizePrices).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={applyAllBatchSizePrices}
+                      className="mt-3 w-full py-2 bg-black text-white text-xs font-bold rounded-lg hover:bg-gray-800 transition-colors"
+                    >
+                      Apply All Size Prices to Matrix Below
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Variants Matrix */}
               {variants.length > 0 && (
                 <div className="mt-6">
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-bold">Variants Matrix (Auto-Generated)</h4>
-                    <span className="text-xs text-gray-500">Total Stock: {totalStock}</span>
+                    <h4 className="text-sm font-bold">Variants Matrix ({variants.length} items)</h4>
+                    <span className="text-xs text-gray-500 font-semibold">Total Stock: {totalStock} units</span>
                   </div>
-                  <div className="overflow-x-auto border rounded-lg">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                  <div className="overflow-x-auto border rounded-xl max-h-60 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 sticky top-0 border-b">
                         <tr>
-                          <th className="text-left p-3 font-medium">Size</th>
-                          <th className="text-left p-3 font-medium">Color</th>
-                          <th className="text-left p-3 font-medium">Price (Rs.)</th>
-                          <th className="text-left p-3 font-medium">Stock</th>
-                          <th className="text-left p-3 font-medium">SKU</th>
+                          <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Size</th>
+                          <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Color</th>
+                          <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Price (Rs.)</th>
+                          <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Stock</th>
+                          <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">SKU</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-gray-100">
                         {variants.map((variant, index) => (
-                          <tr key={index} className="border-t">
-                            <td className="p-3">{variant.size}</td>
-                            <td className="p-3">{variant.color}</td>
-                            <td className="p-3">
+                          <tr key={index} className="hover:bg-gray-50/80">
+                            <td className="p-2.5 font-bold">{variant.size}</td>
+                            <td className="p-2.5 text-gray-600">{variant.color}</td>
+                            <td className="p-2.5">
                               <input
                                 type="number"
-                                value={variant.price || ''}
-                                onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value) || null)}
-                                placeholder={variant.size === variants[0]?.size ? 'Base price' : 'Optional'}
-                                className="w-24 px-2 py-1 border rounded text-sm"
+                                value={variant.price !== null && variant.price !== undefined ? variant.price : ''}
+                                onChange={(e) => updateVariant(index, 'price', e.target.value ? parseFloat(e.target.value) : null)}
+                                placeholder={`Rs. ${formData.base_price}`}
+                                className="w-24 px-2 py-1 border rounded text-xs font-medium"
                               />
                             </td>
-                            <td className="p-3">
+                            <td className="p-2.5">
                               <input
                                 type="number"
                                 value={variant.stock}
                                 onChange={(e) => updateVariant(index, 'stock', parseInt(e.target.value) || 0)}
-                                className="w-20 px-2 py-1 border rounded text-sm"
+                                className="w-20 px-2 py-1 border rounded text-xs font-medium"
                               />
                             </td>
-                            <td className="p-3 text-xs text-gray-500 font-mono">{variant.sku}</td>
+                            <td className="p-2.5 text-[11px] text-gray-400 font-mono">{variant.sku}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    💡 First size price is pre-filled. Other variants can have different prices or leave empty to use base price.
+                  <p className="text-[11px] text-gray-500 mt-2">
+                    💡 If a variant's price is empty, it automatically inherits the base product price (Rs. {formData.base_price}).
                   </p>
                 </div>
               )}
@@ -547,8 +993,154 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
           )}
 
           {currentStep === 5 && (
-            <div className="space-y-5">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Ruler size={20} /> Specifications</h3>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2"><Ruler size={20} /> Specifications & Size Guide</h3>
+                <p className="text-xs text-gray-500">Fabric details, care instructions, and optional customer size guide.</p>
+              </div>
+
+              {/* Dedicated Size Guide Section (Optional) */}
+              <div className="border-2 border-gray-200 rounded-2xl p-5 bg-white space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <Ruler size={16} className="text-black" />
+                      Size Guide & Measurements
+                    </h4>
+                    <p className="text-xs text-gray-500">
+                      When enabled, a "Size Guide" button appears on the customer product detail page.
+                    </p>
+                  </div>
+                  {/* Toggle Switch */}
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <span className="text-xs font-bold text-gray-700">
+                      {sizeGuideEnabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSizeGuideEnabled(!sizeGuideEnabled)}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${
+                        sizeGuideEnabled ? 'bg-black' : 'bg-gray-300'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                          sizeGuideEnabled ? 'left-7' : 'left-1'
+                        }`}
+                      />
+                    </button>
+                  </label>
+                </div>
+
+                {sizeGuideEnabled ? (
+                  <div className="space-y-4 pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-600">
+                        Quick Preset Templates:
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => loadSizeGuidePreset('tshirt')}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-black hover:text-white rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          T-Shirt / Top
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => loadSizeGuidePreset('hoodie')}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-black hover:text-white rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Hoodie
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => loadSizeGuidePreset('pants')}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-black hover:text-white rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Pants / Bottoms
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Size Guide Table */}
+                    <div className="overflow-x-auto border rounded-xl">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="p-2.5 text-left font-bold text-gray-700">Size</th>
+                            <th className="p-2.5 text-left font-bold text-gray-700">Chest / Waist</th>
+                            <th className="p-2.5 text-left font-bold text-gray-700">Length</th>
+                            <th className="p-2.5 text-left font-bold text-gray-700">Shoulder / Hip</th>
+                            <th className="p-2.5 text-left font-bold text-gray-700">Sleeve / Thigh</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {sizeGuideChart.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50/50">
+                              <td className="p-2 font-bold">{row.size}</td>
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  value={row.chest || ''}
+                                  onChange={(e) => {
+                                    const next = [...sizeGuideChart];
+                                    next[idx] = { ...next[idx], chest: e.target.value };
+                                    setSizeGuideChart(next);
+                                  }}
+                                  className="w-full px-2 py-1 border rounded text-xs"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  value={row.length || ''}
+                                  onChange={(e) => {
+                                    const next = [...sizeGuideChart];
+                                    next[idx] = { ...next[idx], length: e.target.value };
+                                    setSizeGuideChart(next);
+                                  }}
+                                  className="w-full px-2 py-1 border rounded text-xs"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  value={row.shoulder || ''}
+                                  onChange={(e) => {
+                                    const next = [...sizeGuideChart];
+                                    next[idx] = { ...next[idx], shoulder: e.target.value };
+                                    setSizeGuideChart(next);
+                                  }}
+                                  className="w-full px-2 py-1 border rounded text-xs"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  value={row.sleeve || ''}
+                                  onChange={(e) => {
+                                    const next = [...sizeGuideChart];
+                                    next[idx] = { ...next[idx], sleeve: e.target.value };
+                                    setSizeGuideChart(next);
+                                  }}
+                                  className="w-full px-2 py-1 border rounded text-xs"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-gray-50 rounded-xl text-xs text-gray-500">
+                    ℹ️ Size guide is currently <strong>disabled</strong> for this product. The "Size Guide" button will not appear on the storefront.
+                  </div>
+                )}
+              </div>
+
+              {/* Garment Specifications */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Fabric / Material</label>
@@ -717,9 +1309,25 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
             ) : (
               <button
                 onClick={handleSubmit}
-                className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors"
+                disabled={isSubmitting}
+                className="flex items-center gap-2 px-6 py-2.5 bg-black hover:bg-gray-800 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-50 shadow-md"
               >
-                <Save size={16} /> {product ? 'Update Product' : 'Create Product'}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>{product ? 'Updating in Neon DB...' : 'Saving to Neon DB...'}</span>
+                  </>
+                ) : submitSuccess ? (
+                  <>
+                    <CheckCircle2 size={16} className="text-green-400" />
+                    <span>Successfully Saved!</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    <span>{product ? 'Update in Neon DB' : 'Save to Neon DB'}</span>
+                  </>
+                )}
               </button>
             )}
           </div>

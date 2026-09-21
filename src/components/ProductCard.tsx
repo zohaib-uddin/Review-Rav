@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Eye, ShoppingBag } from 'lucide-react';
+import { Maximize2, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useCart } from '../context/CartContext';
 
@@ -22,20 +22,22 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Get all images for the product
-  const images = product.images || [product.image];
+  const images = Array.isArray(product.images) && product.images.length > 0 
+    ? product.images 
+    : [product.image_url || product.image || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop'];
   const hasMultipleImages = images.length > 1;
 
-  // Auto-select first size on hover
+  // Auto-select first size
   useEffect(() => {
-    if (isHovered && product.sizes && product.sizes.length > 0 && !selectedSize) {
+    if (product.sizes && product.sizes.length > 0 && !selectedSize) {
       setSelectedSize(product.sizes[0]);
     }
-  }, [isHovered, product.sizes, selectedSize]);
+  }, [product.sizes, selectedSize]);
 
   // Handle hover enter
   const handleMouseEnter = () => {
     setIsHovered(true);
-    if (hasMultipleImages) {
+    if (hasMultipleImages && currentImageIndex === 0) {
       setCurrentImageIndex(1); // Show second image on hover
     }
     setShowSizeSelector(true);
@@ -70,16 +72,12 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
     e.preventDefault();
     e.stopPropagation();
 
-    if (!selectedSize) {
-      alert('Please select a size');
-      return;
-    }
-
+    const sizeToUse = selectedSize || product.sizes?.[0] || 'M';
     const firstColor = product.colors?.[0];
     const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
     
     // Use the new CartContext addToCart which triggers flying animation
-    addToCartWithAnimation(product, selectedSize, colorName, 1, e.currentTarget as HTMLElement);
+    addToCartWithAnimation(product, sizeToUse, colorName, 1, e.currentTarget as HTMLElement);
   };
 
   // Handle Quick View
@@ -100,157 +98,205 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.05 }}
-      className="group relative"
+      className="group relative flex flex-col justify-between h-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Product Image Container - 9:16 aspect ratio, sharp corners */}
-      <Link to={`/products/${product.slug}`} className="block">
-        <div className="relative overflow-hidden aspect-[9/16] bg-gray-100 border-0">
-          {/* Product Image */}
-          <motion.img
-            src={images[currentImageIndex]}
-            alt={product.name}
-            className="w-full h-full object-cover"
-            initial={false}
-            animate={{
-              scale: isHovered ? 1.05 : 1,
-            }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
-          />
-
-          {/* Badge with priority logic */}
-          <div className="absolute top-3 left-3">
-            {/* Manual badges take priority */}
-            {product.is_new_arrival && (
-              <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 block">
-                NEW ARRIVAL
-              </span>
-            )}
-            {product.is_best_seller && !product.is_new_arrival && (
-              <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 block">
-                BEST SELLER
-              </span>
-            )}
-            {product.badge && !product.is_new_arrival && !product.is_best_seller && (
-              <span className="bg-black text-white text-[10px] font-bold px-3 py-1.5 block">
-                {product.badge}
-              </span>
-            )}
-            {/* Auto-calculated discount badge (only if no manual badge) */}
-            {showDiscountBadge && (
-              <motion.span 
-                className="bg-red-600 text-white text-[10px] font-bold px-3 py-1.5 block"
-                animate={{
-                  boxShadow: ['0 0 0 0 rgba(220, 38, 38, 0.4)', '0 0 0 8px rgba(220, 38, 38, 0)'],
-                }}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  repeatDelay: 0.5,
-                }}
-              >
-                {discountPercent}% OFF
-              </motion.span>
-            )}
-          </div>
-
-          {/* Quick View Button - Expands to show text */}
-          <motion.button
-            onClick={handleQuickView}
-            className="absolute top-3 right-3 bg-white text-black flex items-center overflow-hidden"
-            initial={{ opacity: 0, width: '40px', height: '40px', borderRadius: '50%' }}
-            animate={{ 
-              opacity: isHovered ? 1 : 0,
-              width: quickViewExpanded ? '120px' : '40px',
-              height: '40px',
-              borderRadius: '50%',
-            }}
-            transition={{ duration: 0.3 }}
-            onMouseEnter={() => setQuickViewExpanded(true)}
-            onMouseLeave={() => setQuickViewExpanded(false)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <div className="w-[40px] h-[40px] flex items-center justify-center flex-shrink-0">
-              <Eye size={18} />
-            </div>
-            <motion.span 
-              className="text-xs font-bold whitespace-nowrap pr-2"
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ 
-                opacity: quickViewExpanded ? 1 : 0,
-                width: quickViewExpanded ? 'auto' : 0,
+      <div>
+        {/* Product Image Container - 9:16 aspect ratio, sharp corners */}
+        <Link to={`/products/${product.slug || product.id}`} className="block">
+          <div className="relative overflow-hidden aspect-[9/16] bg-gray-100 border-0">
+            {/* Product Image */}
+            <motion.img
+              key={currentImageIndex}
+              src={images[currentImageIndex] || images[0]}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              initial={false}
+              animate={{
+                scale: isHovered ? 1.05 : 1,
               }}
-              transition={{ duration: 0.2 }}
-            >
-              Quick View
-            </motion.span>
-          </motion.button>
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+            />
 
-          {/* Size Selector - Slides up from bottom */}
-          <AnimatePresence>
-            {showSizeSelector && product.sizes && product.sizes.length > 0 && (
-              <motion.div
-                initial={{ y: '100%', opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: '100%', opacity: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-                className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-3 border-t"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-              >
-                <p className="text-xs font-medium mb-2 text-center">Select Size</p>
-                <div className="flex gap-2 justify-center flex-wrap">
-                  {product.sizes.map((size: string) => (
+            {/* Navigation Arrows on Hover (No background, pure white icon with drop shadow) */}
+            {hasMultipleImages && (
+              <AnimatePresence>
+                {isHovered && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute inset-y-0 inset-x-2 flex items-center justify-between pointer-events-none z-20"
+                  >
                     <button
-                      key={size}
+                      type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setSelectedSize(size);
+                        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
                       }}
-                      className={`px-3 py-1.5 text-xs font-medium border-2 transition-all ${
-                        selectedSize === size
-                          ? 'border-black bg-black text-white'
-                          : 'border-gray-300 hover:border-black'
-                      }`}
+                      className="pointer-events-auto bg-transparent border-0 p-1 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)] hover:scale-125 transition-transform cursor-pointer"
+                      aria-label="Previous image"
                     >
-                      {size}
+                      <ChevronLeft size={28} strokeWidth={2.5} />
                     </button>
-                  ))}
-                </div>
-              </motion.div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+                      }}
+                      className="pointer-events-auto bg-transparent border-0 p-1 text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)] hover:scale-125 transition-transform cursor-pointer"
+                      aria-label="Next image"
+                    >
+                      <ChevronRight size={28} strokeWidth={2.5} />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             )}
-          </AnimatePresence>
-        </div>
-      </Link>
 
-      {/* Product Info */}
-      <div className="mt-3 px-0">
-        <Link to={`/products/${product.slug}`}>
-          <h3 className="text-sm font-normal text-gray-800 line-clamp-2 hover:text-black transition-colors">
-            {product.name}
-          </h3>
+            {/* Badges with continuous Zoom In / Zoom Out Loop Animation */}
+            <motion.div
+              className="absolute top-3 left-3 z-20 pointer-events-none flex flex-col gap-1.5"
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              {product.is_new_arrival && (
+                <span className="bg-black text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
+                  NEW ARRIVAL
+                </span>
+              )}
+              {product.is_best_seller && !product.is_new_arrival && (
+                <span className="bg-black text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
+                  BEST SELLER
+                </span>
+              )}
+              {product.badge && !product.is_new_arrival && !product.is_best_seller && (
+                <span className="bg-black text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
+                  {product.badge}
+                </span>
+              )}
+              {showDiscountBadge && (
+                <span className="bg-red-600 text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
+                  {discountPercent}% OFF
+                </span>
+              )}
+            </motion.div>
+
+            {/* Quick View Button - Clean Rectangle Badge format (no circular/oracle distortion) */}
+            <motion.button
+              type="button"
+              onClick={handleQuickView}
+              className="absolute top-3 right-3 bg-white text-black flex items-center justify-center overflow-hidden shadow-md z-20 border border-gray-100"
+              initial={{ opacity: 0, width: '32px', height: '32px' }}
+              animate={{ 
+                opacity: isHovered ? 1 : 0,
+                width: quickViewExpanded ? '112px' : '32px',
+                height: '32px',
+              }}
+              transition={{ duration: 0.25 }}
+              onMouseEnter={() => setQuickViewExpanded(true)}
+              onMouseLeave={() => setQuickViewExpanded(false)}
+              whileTap={{ scale: 0.95 }}
+              title="Quick View"
+            >
+              <div className="w-[32px] h-[32px] flex items-center justify-center flex-shrink-0">
+                <Maximize2 size={14} />
+              </div>
+              <motion.span 
+                className="text-[10px] font-bold tracking-wider uppercase whitespace-nowrap pr-2.5"
+                initial={{ opacity: 0 }}
+                animate={{ 
+                  opacity: quickViewExpanded ? 1 : 0,
+                }}
+                transition={{ duration: 0.2 }}
+              >
+                Quick View
+              </motion.span>
+            </motion.button>
+
+            {/* Size Selector - Slides up from bottom */}
+            <AnimatePresence>
+              {showSizeSelector && product.sizes && product.sizes.length > 0 && (
+                <motion.div
+                  initial={{ y: '100%', opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-3 border-t z-20"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-wider mb-2 text-center text-gray-700">Select Size</p>
+                  <div className="flex gap-1.5 justify-center flex-wrap">
+                    {product.sizes.map((size: string) => (
+                      <button
+                        type="button"
+                        key={size}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedSize(size);
+                        }}
+                        className={`px-2.5 py-1 text-xs font-semibold border transition-all ${
+                          selectedSize === size
+                            ? 'border-black bg-black text-white'
+                            : 'border-gray-300 bg-white hover:border-black'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </Link>
-        <div className="flex items-center gap-2 mt-1.5">
-          {salePrice && salePrice > price ? (
-            <>
+
+        {/* Product Info */}
+        <div className="mt-3 px-0">
+          <Link to={`/products/${product.slug || product.id}`}>
+            <h3 className="text-sm font-normal text-gray-800 line-clamp-1 hover:text-black transition-colors">
+              {product.name}
+            </h3>
+          </Link>
+          <div className="flex items-center gap-2 mt-1.5">
+            {salePrice && salePrice > price ? (
+              <>
+                <span className="text-sm font-bold text-black">
+                  Rs.{price.toLocaleString()}
+                </span>
+                <span className="text-xs text-gray-400 line-through">
+                  Rs.{salePrice.toLocaleString()}
+                </span>
+              </>
+            ) : (
               <span className="text-sm font-bold text-black">
                 Rs.{price.toLocaleString()}
               </span>
-              <span className="text-xs text-gray-400 line-through">
-                Rs.{salePrice.toLocaleString()}
-              </span>
-            </>
-          ) : (
-            <span className="text-sm font-bold text-black">
-              Rs.{price.toLocaleString()}
-            </span>
-          )}
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Full-width Add to Cart button right under the price */}
+      <div className="mt-3">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.98 }}
+          onClick={handleAddToCart}
+          className="w-full py-2.5 bg-black text-white text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 shadow-sm"
+        >
+          <ShoppingBag size={13} />
+          Add to Cart
+        </motion.button>
       </div>
 
       {/* Quick View Modal */}

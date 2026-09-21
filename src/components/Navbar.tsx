@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { Search, Heart, ShoppingBag, User, Menu, X, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useCart } from '../context/CartContext';
 import MegaMenu from './MegaMenu';
 import SearchModal from './SearchModal';
 
@@ -33,6 +34,7 @@ export default function Navbar() {
   const user = useStore(state => state.user);
   const categories = useStore(state => state.categories);
   const fetchCategories = useStore(state => state.fetchCategories);
+  const { openSidebar } = useCart();
   const navigate = useNavigate();
   
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -76,34 +78,34 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Announcement Bar with Carousel */}
+      {/* Announcement Bar with Pure Black Background, Reduced Height, No Dots */}
       <AnimatePresence>
         {showAnnouncement && (
           <motion.div
-            initial={{ y: -60, opacity: 0 }}
+            initial={{ y: -50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -60, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-gradient-to-r from-purple-900 via-black to-purple-900 text-white text-sm py-3 overflow-hidden relative"
+            exit={{ y: -50, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="bg-black text-white text-xs py-2 overflow-hidden relative border-b border-white/10"
           >
-            <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-4">
+            <div className="w-full px-4 flex items-center justify-between gap-3">
               <button
                 onClick={prevSlide}
-                className="absolute left-2 p-1 hover:bg-white/10 rounded-full transition-colors z-10"
+                className="p-1 hover:bg-white/10 rounded-full transition-colors z-10 text-gray-300 hover:text-white"
                 aria-label="Previous slide"
               >
-                <ChevronLeft size={18} strokeWidth={1.5} />
+                <ChevronLeft size={16} strokeWidth={1.5} />
               </button>
               
               <div className="overflow-hidden flex-1 text-center">
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={currentSlide}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.3 }}
-                    className="font-medium tracking-wide"
+                    className="font-medium tracking-wider uppercase text-[11px] sm:text-xs text-gray-100"
                   >
                     {announcementSlides[currentSlide]}
                   </motion.p>
@@ -112,25 +114,11 @@ export default function Navbar() {
               
               <button
                 onClick={nextSlide}
-                className="absolute right-2 p-1 hover:bg-white/10 rounded-full transition-colors z-10"
+                className="p-1 hover:bg-white/10 rounded-full transition-colors z-10 text-gray-300 hover:text-white"
                 aria-label="Next slide"
               >
-                <ChevronRight size={18} strokeWidth={1.5} />
+                <ChevronRight size={16} strokeWidth={1.5} />
               </button>
-            </div>
-            
-            {/* Slide indicators */}
-            <div className="flex justify-center gap-2 mt-2">
-              {announcementSlides.map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setCurrentSlide(idx)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    idx === currentSlide ? 'bg-white w-4' : 'bg-white/40'
-                  }`}
-                  aria-label={`Go to slide ${idx + 1}`}
-                />
-              ))}
             </div>
           </motion.div>
         )}
@@ -142,61 +130,73 @@ export default function Navbar() {
           isScrolled ? 'bg-white/95 backdrop-blur-lg shadow-lg' : 'bg-white'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className={`flex items-center justify-between transition-all duration-300 ${isScrolled ? 'h-16' : 'h-20'}`}>
-            {/* Left Side - Search Icon (Far Left) */}
+            {/* Left Side - Search Icon (Far Left Corner) */}
             <div className="flex items-center gap-2">
               <button
-                className="lg:hidden p-2"
+                className="lg:hidden p-2 hover:bg-gray-100 rounded-full transition-colors"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                aria-label="Toggle navigation menu"
               >
-                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+                {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
               </button>
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors flex items-center gap-2"
                 aria-label="Search"
               >
                 <Search size={20} />
+                <span className="hidden md:inline text-xs font-semibold uppercase tracking-wider text-gray-400">Search</span>
               </button>
             </div>
 
-            {/* Center - Logo with Dynamic Scale */}
-            <Link to="/" className="flex items-center" ref={logoRef}>
-              <motion.h1
-                style={{ scale: logoScale, fontSize: logoFontSize }}
-                className="font-black tracking-tighter font-display transition-transform duration-300 origin-center"
-              >
-                RAVENZA
-              </motion.h1>
-            </Link>
+            {/* Center - Logo */}
+            <div className="flex-1 flex items-center justify-center">
+              <Link to="/" className="flex items-center" ref={logoRef}>
+                <motion.h1
+                  style={{ scale: logoScale, fontSize: logoFontSize }}
+                  className="font-black tracking-tighter font-display transition-transform duration-300 origin-center text-center"
+                >
+                  RAVENZA
+                </motion.h1>
+              </Link>
+            </div>
 
-            {/* Right Side - Tightly Grouped Icons */}
-            <div className="flex items-center gap-0">
+            {/* Right Side - Tightly Grouped Icons (Far Right Corner) */}
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* Admin Icon - Before Profile */}
               {user?.role === 'admin' && (
                 <Link
-                  to="/admin/signin"
-                  className="p-2 hover:bg-gray-100 transition-colors"
+                  to="/admin"
+                  className="p-2.5 hover:bg-gray-100 rounded-full transition-colors"
                   title="Admin Panel"
                 >
-                  <Shield size={18} className="text-purple-600" />
+                  <Shield size={19} className="text-purple-600" />
                 </Link>
               )}
               
               {/* Profile Icon */}
-              <Link to="/dashboard" className="p-2 hover:bg-gray-100 transition-colors">
-                <User size={18} />
+              <Link
+                to={user ? (user.role === 'admin' ? '/admin' : '/dashboard') : '/login'}
+                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors"
+                title={user ? user.name || 'Account' : 'Sign In'}
+              >
+                <User size={19} />
               </Link>
 
               {/* Wishlist Icon */}
-              <Link to="/dashboard/wishlist" className="p-2 hover:bg-gray-100 transition-colors relative">
-                <Heart size={18} />
+              <Link
+                to="/dashboard/wishlist"
+                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors relative"
+                title="Wishlist"
+              >
+                <Heart size={19} />
                 {wishlist.length > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold"
+                    className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold"
                   >
                     {wishlist.length}
                   </motion.span>
@@ -204,44 +204,53 @@ export default function Navbar() {
               </Link>
 
               {/* Cart Icon */}
-              <Link to="/cart" className="p-2 hover:bg-gray-100 transition-colors relative">
-                <ShoppingBag size={18} />
+              <button
+                type="button"
+                data-cart-icon="true"
+                onClick={(e) => {
+                  e.preventDefault();
+                  openSidebar();
+                }}
+                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors relative cursor-pointer"
+                title="View Bag"
+              >
+                <ShoppingBag size={19} />
                 {cartCount > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="absolute -top-0.5 -right-0.5 bg-black text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold"
+                    className="absolute top-1.5 right-1.5 bg-black text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold"
                   >
                     {cartCount}
                   </motion.span>
                 )}
-              </Link>
+              </button>
             </div>
           </div>
 
-          {/* Category Navigation - Only on Desktop */}
-          <div className="hidden lg:block border-t">
+          {/* Category Navigation - Positioned Relative for MegaMenu anchoring */}
+          <div className="hidden lg:block border-t border-gray-100 relative">
             <div className="flex items-center justify-center gap-8 py-3">
               {mainCategories.map(category => (
                 <div
                   key={category.slug}
-                  className="relative"
+                  className="static"
                   onMouseEnter={() => setHoveredCategory(category.slug)}
                   onMouseLeave={() => setHoveredCategory(null)}
                 >
                   <Link
                     to={`/collections/${category.slug}`}
-                    className="text-sm font-medium text-gray-700 hover:text-black transition-colors flex items-center gap-1"
+                    className="text-xs font-bold uppercase tracking-wider text-gray-800 hover:text-black transition-colors flex items-center gap-1.5 py-1"
                   >
                     {category.name}
                     {category.badge && (
-                      <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">
+                      <span className="text-[9px] bg-black text-white px-1.5 py-0.2 rounded font-bold uppercase">
                         {category.badge}
                       </span>
                     )}
                   </Link>
 
-                  {/* Mega Menu */}
+                  {/* Mega Menu - Guaranteed to open below category navigation */}
                   <AnimatePresence>
                     {hoveredCategory === category.slug && (
                       <MegaMenu category={category} />
@@ -295,7 +304,7 @@ export default function Navbar() {
                     <>
                       <Link to="/dashboard" className="block text-lg font-medium py-3 border-b">My Account</Link>
                       {user.role === 'admin' && (
-                        <Link to="/admin/signin" className="block text-lg font-medium py-3 text-purple-600 border-b">
+                        <Link to="/admin" className="block text-lg font-medium py-3 text-purple-600 border-b">
                           <Shield size={16} className="inline mr-2" /> Admin Panel
                         </Link>
                       )}

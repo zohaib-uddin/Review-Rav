@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, Package, CheckCircle } from 'lucide-react';
+import { Bell, AlertTriangle, Package, CheckCircle, RefreshCw } from 'lucide-react';
+import { useStore } from '../../store/useStore';
 
 interface StockAlert {
   id: string;
@@ -13,78 +14,42 @@ interface StockAlert {
 }
 
 export default function StockAlerts() {
+  const { products, fetchProducts } = useStore();
   const [alerts, setAlerts] = useState<StockAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
+  const [notifiedIds, setNotifiedIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    fetchAlerts();
-  }, []);
+    fetchProducts();
+  }, [fetchProducts]);
 
-  const fetchAlerts = async () => {
-    setLoading(true);
-    try {
-      // Simulate API call - replace with actual API
-      const mockAlerts: StockAlert[] = [
-        {
-          id: '1',
-          productId: '2',
-          productName: 'Acid Wash Phantom Tee',
-          currentStock: 8,
-          reorderPoint: 15,
-          type: 'low',
-          createdAt: '2024-01-15T10:30:00Z',
-          notified: true,
-        },
-        {
-          id: '2',
-          productId: '3',
-          productName: 'Wide Leg Graphic Trouser',
-          currentStock: 0,
-          reorderPoint: 10,
-          type: 'out',
-          createdAt: '2024-01-14T15:20:00Z',
-          notified: true,
-        },
-        {
-          id: '3',
-          productId: '5',
-          productName: 'Neon Pulse Graphic Shorts',
-          currentStock: 5,
-          reorderPoint: 10,
-          type: 'low',
-          createdAt: '2024-01-13T09:15:00Z',
-          notified: false,
-        },
-        {
-          id: '4',
-          productId: '7',
-          productName: 'Denim Jacket - Raven Black',
-          currentStock: 3,
-          reorderPoint: 8,
-          type: 'low',
-          createdAt: '2024-01-12T14:45:00Z',
-          notified: true,
-        },
-      ];
-      
-      setAlerts(mockAlerts);
-    } catch (error) {
-      console.error('Failed to fetch alerts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    // Generate dynamic alerts from real products (threshold: 5)
+    const generated: StockAlert[] = [];
+    products.forEach((p) => {
+      const stock = (p as any).stockCount ?? p.stock ?? 50;
+      if (stock <= 5) {
+        generated.push({
+          id: `alert-${p.id}`,
+          productId: p.id,
+          productName: p.name,
+          currentStock: stock,
+          reorderPoint: 5,
+          type: stock === 0 ? 'out' : 'low',
+          createdAt: p.created_at || new Date().toISOString(),
+          notified: Boolean(notifiedIds[`alert-${p.id}`]),
+        });
+      }
+    });
+    setAlerts(generated);
+  }, [products, notifiedIds]);
 
-  const markAsNotified = async (id: string) => {
-    try {
-      // Simulate API call - replace with actual API
-      setAlerts(alerts.map(alert => 
-        alert.id === id ? { ...alert, notified: true } : alert
-      ));
-    } catch (error) {
-      console.error('Failed to update alert:', error);
-    }
+  const markAsNotified = (id: string) => {
+    setNotifiedIds(prev => ({ ...prev, [id]: true }));
+    setAlerts(alerts.map(alert => 
+      alert.id === id ? { ...alert, notified: true } : alert
+    ));
   };
 
   const filteredAlerts = alerts.filter(alert => {

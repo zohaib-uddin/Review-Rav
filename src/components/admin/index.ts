@@ -1,4 +1,5 @@
 export { default as AdminCategories } from './AdminCategories';
+export { default as AdminProducts } from './AdminProducts';
 export { default as AdminCollections } from './AdminCollections';
 export { default as AdminReviews } from './AdminReviews';
 export { default as AdminFAQs } from './AdminFAQs';
@@ -10,3 +11,6 @@ export { default as InventoryManager } from './InventoryManager';
 export { default as BulkImportExport } from './BulkImportExport';
 export { default as StockAlerts } from './StockAlerts';
 export { default as EmailMarketing } from './EmailMarketing';
+export { default as AdminCustomers } from './AdminCustomers';
+export { default as AdminDiscounts } from './AdminDiscounts';
+export { default as AdminAuditLogs } from './AdminAuditLogs';

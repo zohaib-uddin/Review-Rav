@@ -16,6 +16,9 @@ export const categories = pgTable('categories', {
   // Collections in Focus fields
   is_featured_in_focus: boolean('is_featured_in_focus').notNull().default(false),
   display_order_in_focus: integer('display_order_in_focus').notNull().default(0),
+  // Warm Chapters fields
+  is_warm_chapter: boolean('is_warm_chapter').notNull().default(false),
+  display_order_warm_chapter: integer('display_order_warm_chapter').notNull().default(0),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
@@ -25,6 +28,7 @@ export const categories = pgTable('categories', {
   sortIdx: index('categories_sort_idx').on(table.sort_order),
   featuredInFocusIdx: index('categories_featured_in_focus_idx').on(table.is_featured_in_focus),
   displayOrderInFocusIdx: index('categories_display_order_in_focus_idx').on(table.display_order_in_focus),
+  warmChapterIdx: index('categories_warm_chapter_idx').on(table.is_warm_chapter),
 }));
 
 // Categories relations - simplified to avoid self-reference issues
