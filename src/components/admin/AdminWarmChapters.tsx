@@ -41,8 +41,8 @@ export default function AdminWarmChapters() {
     try {
       const token = localStorage.getItem('token');
       const url = editingId
-        ? `http://localhost:3001/api/warm-chapters/${editingId}`
-        : 'http://localhost:3001/api/warm-chapters';
+        ? `/api/warm-chapters/${editingId}`
+        : '/api/warm-chapters';
       
       const method = editingId ? 'PUT' : 'POST';
 
@@ -88,7 +88,7 @@ export default function AdminWarmChapters() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/warm-chapters/${id}`, {
+      const response = await fetch(`/api/warm-chapters/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -108,7 +108,7 @@ export default function AdminWarmChapters() {
   const handleToggleActive = async (chapter: WarmChapter) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/warm-chapters/${chapter.id}`, {
+      const response = await fetch(`/api/warm-chapters/${chapter.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -188,7 +188,7 @@ export default function AdminWarmChapters() {
                 <label className="block text-sm font-medium mb-1">Subtitle</label>
                 <input
                   type="text"
-                  value={formData.subtitle}
+                  value={formData.subtitle || ''}
                   onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
                   className="w-full border rounded-lg px-3 py-2"
                 />

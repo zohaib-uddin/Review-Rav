@@ -23,7 +23,7 @@ export default function AdminJournal() {
 
   const fetchEntries = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/journal');
+      const response = await fetch('/api/journal');
       const data = await response.json();
       setEntries(data);
     } catch (error) {

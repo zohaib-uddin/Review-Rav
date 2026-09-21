@@ -19,7 +19,7 @@ export default function AdminFAQs() {
 
   const fetchFaqs = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/faqs');
+      const response = await fetch('/api/faqs');
       const data = await response.json();
       setFaqs(data);
     } catch (error) {

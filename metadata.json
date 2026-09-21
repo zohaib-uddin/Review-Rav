@@ -1,0 +1,6 @@
+{
+  "name": "Ravenza - Premium Streetwear",
+  "description": "Pakistan's premium streetwear brand e-commerce store with collections, products, cart, and admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

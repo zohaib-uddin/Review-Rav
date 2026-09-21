@@ -23,7 +23,7 @@ export default function Navbar() {
   const [lastScrollY, setLastScrollY] = useState(0);
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const { scrollY } = useScroll();
-  const logoRef = useRef<HTMLDivElement>(null);
+  const logoRef = useRef<HTMLAnchorElement>(null);
   
   // Logo scale based on scroll position
   const logoScale = useTransform(scrollY, [0, 200], [1, 0.85]);

@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node server.ts",
+    "start": "node server.ts",
     "build": "vite build",
+    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -14,8 +16,9 @@
     "@hookform/resolvers": "^5.9.1",
     "@neondatabase/serverless": "^1.1.0",
     "@supabase/supabase-js": "^2.98.0",
+    "@types/bcryptjs": "^3.0.0",
     "@types/papaparse": "^5.5.2",
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.3",
     "cors": "^2.8.6",
     "date-fns": "^2.30.0",
@@ -45,7 +48,6 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",
-    "@types/bcrypt": "^6.0.0",
     "@types/canvas-confetti": "^1.6.4",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

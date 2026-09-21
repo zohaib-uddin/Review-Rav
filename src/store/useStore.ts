@@ -59,6 +59,7 @@ export interface Product {
     sku: string;
   }>;
   size_guide?: any;
+  size_guide_enabled?: boolean;
   additional_specs?: Array<{ key: string; value: string }>;
   
   // Status
@@ -69,6 +70,8 @@ export interface Product {
   // Computed fields for frontend
   price?: number;
   salePrice?: number;
+  comparePrice?: number;
+  stock?: number;
   image?: string;
   sizes?: string[];
   colors?: string[];
@@ -119,12 +122,14 @@ export interface Order {
 export interface Review {
   id: string;
   product_id: string;
+  product_slug?: string;
   user_id: string;
   user_name: string;
   rating: number;
   comment: string;
   is_approved: boolean;
   date: string;
+  created_at?: string;
   images?: string[];
 }
 

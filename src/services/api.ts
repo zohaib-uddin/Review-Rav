@@ -1,7 +1,7 @@
 // API Service Layer - Handles all backend communication
 // Uses fetch to call API endpoints which interact with Neon DB via Drizzle
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 class ApiService {
   private token: string | null = null;
@@ -13,6 +13,10 @@ class ApiService {
   setToken(token: string) {
     this.token = token;
     localStorage.setItem('ravenza_token', token);
+  }
+
+  getToken(): string | null {
+    return this.token || localStorage.getItem('ravenza_token');
   }
 
   clearToken() {

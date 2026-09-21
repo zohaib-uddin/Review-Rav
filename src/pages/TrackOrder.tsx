@@ -31,7 +31,7 @@ export default function TrackOrder() {
         return;
       }
 
-      const response = await fetch(`http://localhost:3001/api/orders/track/${trackingId}`);
+      const response = await fetch(`/api/orders/track/${trackingId}`);
       const data = await response.json();
 
       if (response.ok && data) {

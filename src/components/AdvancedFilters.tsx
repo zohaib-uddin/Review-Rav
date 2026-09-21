@@ -53,7 +53,10 @@ export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps
     const colors = new Set<string>();
     products.forEach(p => {
       if (p.attributes?.colors) {
-        p.attributes.colors.forEach((c: string) => colors.add(c));
+        p.attributes.colors.forEach((c: any) => {
+          const colorName = typeof c === 'string' ? c : c?.name;
+          if (colorName) colors.add(colorName);
+        });
       }
     });
     return Array.from(colors).sort();
@@ -63,7 +66,7 @@ export default function AdvancedFilters({ onFilterChange }: AdvancedFiltersProps
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const handleCheckboxChange = (category: keyof AdvancedFilterState, value: string) => {
+  const handleCheckboxChange = (category: 'size' | 'color' | 'features' | 'categories', value: string) => {
     const newFilters = { ...filters };
     const arr = newFilters[category] as string[];
     if (arr.includes(value)) {

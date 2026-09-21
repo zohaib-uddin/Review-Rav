@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { X, Plus, Trash2, Save, ChevronLeft, ChevronRight, Package, Tag, Image, Palette, Ruler, FileText, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Trash2, Save, ChevronLeft, ChevronRight, Package, Tag, Image, Palette, Ruler, FileText, Loader2, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useStore, Product } from '../../store/useStore';
 import api from '../../services/api';
 

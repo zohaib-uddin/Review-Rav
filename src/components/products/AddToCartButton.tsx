@@ -1,8 +1,8 @@
 import { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ShoppingBag } from 'lucide-react';
-import { useCart } from '../context/CartContext';
-import { Product } from '../store/useStore';
+import { useCart } from '../../context/CartContext';
+import { Product } from '../../store/useStore';
 
 interface AddToCartButtonProps {
   product: Product;
@@ -35,7 +35,7 @@ export default function AddToCartButton({
       return;
     }
 
-    const firstColor = product.colors?.[0];
+    const firstColor: any = product.colors?.[0];
     const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || selectedColor || 'Black';
 
     // Pass the button element as trigger for flying animation

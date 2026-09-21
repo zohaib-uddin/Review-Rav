@@ -15,7 +15,7 @@ export default function AdminOrders() {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3001/api/orders', {
+      const response = await fetch('/api/orders', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -33,7 +33,7 @@ export default function AdminOrders() {
     setUpdating(orderId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/orders/${orderId}/status`, {
+      const response = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ export default function AdminOrders() {
     setUpdating(orderId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/orders/${orderId}/payment-status`, {
+      const response = await fetch(`/api/orders/${orderId}/payment-status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

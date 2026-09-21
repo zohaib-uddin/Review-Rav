@@ -122,7 +122,7 @@ export default function CollectionHero({ category }: CollectionHeroProps) {
 
       {/* Slide Indicators */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex gap-3">
-        {images.map((_, idx) => (
+        {images.map((_: string, idx: number) => (
           <button
             key={idx}
             onClick={() => setCurrentSlide(idx)}
