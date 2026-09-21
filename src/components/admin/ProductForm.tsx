@@ -39,6 +39,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     description: product?.description || '',
     base_price: product?.base_price || product?.price || 0,
     compare_at_price: product?.compare_at_price || product?.salePrice || null as number | null,
+    cost_price: (product as any)?.cost_price || null as number | null,
     category_id: product?.category_id || '',
     subcategory_id: (product as any)?.subcategory_id || '',
     category_slug: product?.category_slug || product?.category || '',
@@ -49,6 +50,8 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
     is_new_arrival: Boolean(product?.is_new_arrival ?? product?.isNew),
     is_best_seller: Boolean(product?.is_best_seller ?? (product as any)?.is_bestseller ?? product?.isBestseller),
     is_featured: Boolean(product?.is_featured ?? product?.isFeatured),
+    is_spotlight: Boolean((product as any)?.is_spotlight),
+    low_stock_threshold: Number((product as any)?.low_stock_threshold) || 4,
     badge: product?.badge || '',
     images: getInitialImages(product),
     attributes: product?.attributes || { sizes: ['S', 'M', 'L', 'XL'], colors: ['Black'] },
@@ -93,6 +96,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         description: product.description || '',
         base_price: product.base_price || product.price || 0,
         compare_at_price: product.compare_at_price || product.salePrice || null,
+        cost_price: (product as any)?.cost_price || null,
         category_id: product.category_id || categories.find(c => c.slug === (product.category_slug || product.category))?.id || '',
         subcategory_id: (product as any).subcategory_id || '',
         category_slug: product.category_slug || product.category || '',
@@ -103,6 +107,8 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
         is_new_arrival: Boolean(product.is_new_arrival ?? product.isNew),
         is_best_seller: Boolean(product.is_best_seller ?? (product as any)?.is_bestseller ?? product.isBestseller),
         is_featured: Boolean(product.is_featured ?? product.isFeatured),
+        is_spotlight: Boolean((product as any)?.is_spotlight),
+        low_stock_threshold: Number((product as any)?.low_stock_threshold) || 4,
         badge: product.badge || '',
         images: getInitialImages(product),
         attributes: product.attributes || { sizes: product.sizes || ['S', 'M', 'L', 'XL'], colors: product.colors || ['Black'] },
@@ -397,6 +403,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       description: formData.description,
       base_price: Number(formData.base_price),
       compare_at_price: formData.compare_at_price ? Number(formData.compare_at_price) : null,
+      cost_price: formData.cost_price ? Number(formData.cost_price) : null,
       is_active: !formData.is_draft,
       category_id: formData.category_id || null,
       subcategory_id: formData.subcategory_id || null,
@@ -408,6 +415,9 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       is_new_arrival: formData.is_new_arrival,
       is_best_seller: formData.is_best_seller,
       is_featured: formData.is_featured,
+      is_spotlight: formData.is_spotlight,
+      track_inventory: true,
+      low_stock_threshold: Number(formData.low_stock_threshold) || 4,
       badge: formData.badge,
       images: formData.images,
       image_url: formData.images[0] || '',
@@ -433,6 +443,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       meta_description: formData.meta_description,
       meta_keywords: formData.focus_keywords,
       focus_keywords: formData.focus_keywords,
+      specs: details.join('\n'),
       status: formData.status,
       is_draft: formData.is_draft,
       created_at: product?.created_at || new Date().toISOString(),
@@ -450,7 +461,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       details,
       material: formData.fabric_composition || formData.fabric,
       category: formData.category_slug,
-    };
+    } as any;
 
     try {
       if (product) {
@@ -612,7 +623,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                 <label className="block text-sm font-medium mb-1.5">Description</label>
                 <textarea value={formData.description} onChange={e => update('description', e.target.value)} rows={3} placeholder="Product description..." className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Base Price (Rs.) *</label>
                   <div className="relative">
@@ -627,10 +638,23 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                     <input type="number" value={formData.compare_at_price || ''} onChange={e => update('compare_at_price', e.target.value ? Number(e.target.value) : null)} placeholder="Original price" className="w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors" />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Cost Price (Rs.)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">Rs.</span>
+                    <input type="number" value={formData.cost_price || ''} onChange={e => update('cost_price', e.target.value ? Number(e.target.value) : null)} placeholder="Production cost" className="w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1.5">SKU</label>
-                <input type="text" value={formData.sku} onChange={e => update('sku', e.target.value)} placeholder="e.g., RVZ-CO-001" className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors font-mono" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">SKU</label>
+                  <input type="text" value={formData.sku} onChange={e => update('sku', e.target.value)} placeholder="e.g., RVZ-CO-001" className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors font-mono" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Low Stock Threshold</label>
+                  <input type="number" value={formData.low_stock_threshold || 4} onChange={e => update('low_stock_threshold', Number(e.target.value))} placeholder="Alert when stock < 4" className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors font-mono" />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">Badge</label>
@@ -770,6 +794,10 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                   <label className="flex items-center gap-2.5 cursor-pointer bg-gray-50 px-3.5 py-2 rounded-xl border border-gray-200 hover:border-gray-300">
                     <input type="checkbox" checked={formData.is_featured} onChange={e => update('is_featured', e.target.checked)} className="w-4 h-4 rounded accent-black" />
                     <span className="text-xs font-semibold">Featured Drop</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 cursor-pointer bg-gray-50 px-3.5 py-2 rounded-xl border border-gray-200 hover:border-gray-300">
+                    <input type="checkbox" checked={formData.is_spotlight} onChange={e => update('is_spotlight', e.target.checked)} className="w-4 h-4 rounded accent-black" />
+                    <span className="text-xs font-semibold">Spotlight Collection</span>
                   </label>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import { Droplet, Wind, CircleSlash, Shirt } from 'lucide-react';
 
 interface CareInstructionsProps {
-  careInstructions?: Array<{ icon: string; text: string }> | string | any[] | null;
+  careInstructions?: Array<{ icon: string; text: string }> | null;
 }
 
 const defaultCareIcons: Record<string, any> = {

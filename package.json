@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.ts",
-    "start": "node server.ts",
-    "build": "vite build",
-    "lint": "tsc --noEmit",
+    "dev": "tsx server.ts",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "lint": "vite build --mode development",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -22,7 +22,6 @@
     "canvas-confetti": "^1.9.3",
     "cors": "^2.8.6",
     "date-fns": "^2.30.0",
-    "dompurify": "^3.4.15",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
@@ -31,20 +30,22 @@
     "i18next-browser-languagedetector": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.294.0",
-    "nodemailer": "^10.0.10",
     "papaparse": "^5.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.88.0",
     "react-hot-toast": "^2.6.0",
     "react-i18next": "^17.0.14",
-    "react-quill": "^2.0.0",
     "react-router-dom": "^7.18.4",
     "recharts": "^2.15.4",
     "uuid": "^14.0.2",
     "xlsx": "^0.18.5",
     "zod": "^4.6.4",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.15",
+    "esbuild": "^0.28.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",
@@ -52,7 +53,6 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/nodemailer": "^8.0.2",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/uuid": "^9.0.7",

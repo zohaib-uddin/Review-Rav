@@ -1,3 +1,6 @@
+const rawApi = import.meta.env.VITE_API_URL;
+const API_BASE = (rawApi && !rawApi.includes('localhost:3001')) ? rawApi : '/api';
+
 /**
  * Fetch all active warm chapters ordered by display_order
  * Calls the backend API endpoint
@@ -6,7 +9,6 @@ export async function getWarmChapters() {
   try {
     console.log('🔥 Fetching warm chapters from API...');
     
-    const API_BASE = import.meta.env.VITE_API_URL || '/api';
     const response = await fetch(`${API_BASE}/warm-chapters`);
     
     if (!response.ok) {
@@ -34,7 +36,6 @@ export async function getProductsByIds(ids: string[]) {
   try {
     console.log(`🛍️ Fetching ${ids.length} products by IDs...`);
     
-    const API_BASE = import.meta.env.VITE_API_URL || '/api';
     const response = await fetch(`${API_BASE}/products/by-ids`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

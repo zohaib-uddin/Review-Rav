@@ -39,8 +39,8 @@ export default function ShopAllPage() {
   const availableColors = useMemo(() => {
     const colors = new Set<string>();
     products.forEach((p) =>
-      p.colors?.forEach((c: any) => {
-        const colorName = typeof c === 'string' ? c : c?.name;
+      p.colors?.forEach((c) => {
+        const colorName = typeof c === 'string' ? c : c.name;
         if (colorName) colors.add(colorName);
       })
     );
@@ -79,8 +79,8 @@ export default function ShopAllPage() {
     // Colors
     if (filterState.colors.length > 0) {
       filtered = filtered.filter((p) =>
-        p.colors?.some((c: any) =>
-          filterState.colors.includes(typeof c === 'string' ? c : c?.name)
+        p.colors?.some((c) =>
+          filterState.colors.includes(typeof c === 'string' ? c : c.name)
         )
       );
     }

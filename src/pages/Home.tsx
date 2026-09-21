@@ -8,7 +8,7 @@ import {
   JournalSection,
   ReviewsCarousel,
   FAQSection,
-  // NewsletterSection,
+  NewsletterSection,
 } from '../components/home';
 
 export default function Home() {
@@ -50,7 +50,7 @@ export default function Home() {
       <JournalSection />
       <ReviewsCarousel reviews={reviews} />
       <FAQSection />
-      {/* <NewsletterSection /> */}
+      <NewsletterSection />
     </div>
   );
 }

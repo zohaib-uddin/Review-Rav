@@ -904,6 +904,52 @@ const initialCoupons: Coupon[] = [
 // In-Memory Storage Instances
 let categoriesStore = [...initialCategories];
 let productsStore = initialProducts.map((p) => ({ ...p, is_active: p.is_active !== false }));
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function resolveCategoryUuid(val: any): string | null {
+  if (!val || typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  if (!trimmed || trimmed === 'none' || trimmed === 'null' || trimmed === 'undefined') return null;
+  if (UUID_REGEX.test(trimmed)) return trimmed;
+  const match = categoriesStore.find(
+    (c) => c.id === trimmed || c.slug === trimmed || (c.name && c.name.toLowerCase() === trimmed.toLowerCase())
+  );
+  if (match && UUID_REGEX.test(match.id)) {
+    return match.id;
+  }
+  return null;
+}
+
+async function syncStoresFromNeon() {
+  if (!sql) return;
+  try {
+    const dbCats = await sql`SELECT * FROM categories ORDER BY sort_order ASC`;
+    if (dbCats && dbCats.length > 0) {
+      categoriesStore = dbCats.map((c: any) => ({
+        ...c,
+        is_active: c.is_active !== false,
+      }));
+      console.log(`✅ Loaded ${categoriesStore.length} categories from Neon DB`);
+    }
+
+    const dbProds = await sql`
+      SELECT p.*, c.name as category_name, c.slug as category_slug
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      ORDER BY p.created_at DESC
+    `;
+    if (dbProds && dbProds.length > 0) {
+      productsStore = dbProds.map((p: any) => ({
+        ...p,
+        is_active: p.is_active !== false,
+      }));
+      console.log(`✅ Loaded ${productsStore.length} products from Neon DB`);
+    }
+  } catch (err: any) {
+    console.error('Initial Neon sync warning:', err.message);
+  }
+}
 let warmChaptersStore = [...initialWarmChapters];
 let collectionsStore = [...initialCollections];
 let reviewsStore = [...initialReviews];
@@ -1417,95 +1463,143 @@ async function startServer() {
     try {
       const b = req.body;
       const name = b.name;
-      const slug = b.slug || name?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `prod-${Date.now()}`;
-      const basePrice = Number(b.base_price || b.price) || 0;
-      const comparePrice = b.compare_at_price ? Number(b.compare_at_price) : null;
+      if (!name) {
+        return res.status(400).json({ message: 'Product name is required' });
+      }
+      const slug = b.slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `prod-${Date.now()}`;
+      const basePrice = Number(b.base_price !== undefined ? b.base_price : b.price) || 0;
+      const comparePrice = (b.compare_at_price !== undefined && b.compare_at_price !== null && b.compare_at_price !== '')
+        ? Number(b.compare_at_price)
+        : null;
+      const costPrice = (b.cost_price !== undefined && b.cost_price !== null && b.cost_price !== '')
+        ? Number(b.cost_price)
+        : null;
+
+      const categoryId = resolveCategoryUuid(b.category_id);
+      const subcategoryId = resolveCategoryUuid(b.subcategory_id);
+
+      const brand = b.brand || 'RAVENZA';
+      const sku = b.sku || `RVZ-${Date.now().toString().slice(-4)}`;
+      const fabric = b.fabric || '';
+      const fabricComposition = b.fabric_composition || '';
+      const fabricFinish = b.fabric_finish || '';
+      const fit = b.fit || '';
+      const graphicPrint = b.graphic_print || '';
+      const garmentSpecs = b.garment_specs || '';
+      const garmentCare = b.garment_care || '';
+      const shippingDelivery = b.shipping_delivery || '';
+      const modelSize = b.model_size || '';
+      const metaTitle = b.meta_title || '';
+      const metaDescription = b.meta_description || '';
+      const metaKeywords = b.meta_keywords || b.focus_keywords || '';
+      const focusKeywords = b.focus_keywords || b.meta_keywords || '';
+      const isNewArrival = Boolean(b.is_new_arrival ?? b.isNew ?? true);
+      const isBestSeller = Boolean(b.is_best_seller ?? b.is_bestseller ?? b.isBestseller ?? false);
+      const isFeatured = Boolean(b.is_featured ?? b.isFeatured ?? false);
+      const isSpotlight = Boolean(b.is_spotlight ?? false);
+      const isDraft = Boolean(b.is_draft ?? false);
+      const status = b.status || (isDraft ? 'draft' : 'active');
+      const isActive = Boolean(b.is_active ?? (status !== 'archived' && !isDraft));
+      const trackInventory = Boolean(b.track_inventory ?? true);
+      const lowStockThreshold = Number(b.low_stock_threshold) || 4;
+      const badge = b.badge || null;
+      const specs = b.specs || (Array.isArray(b.details) ? b.details.join('\n') : (b.garment_specs || ''));
+
       const images = Array.isArray(b.images) && b.images.length > 0
         ? b.images
         : [b.image_url || b.image || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop'];
-      const isNewArrival = b.is_new_arrival ?? b.isNew ?? true;
-      const isBestSeller = b.is_best_seller ?? b.is_bestseller ?? b.isBestseller ?? false;
-      const isFeatured = b.is_featured ?? b.isFeatured ?? false;
-      const categoryId = b.category_id || null;
-      const subcategoryId = b.subcategory_id || null;
-      const brand = b.brand || 'RAVENZA';
-      const sku = b.sku || `RVZ-${Date.now().toString().slice(-4)}`;
-      const attributes = b.attributes || { sizes: b.sizes || ['S', 'M', 'L', 'XL'], colors: b.colors || ['Black'] };
+      const imageUrl = images[0] || '';
+
+      const attributes = b.attributes || {
+        sizes: b.sizes || ['S', 'M', 'L', 'XL'],
+        colors: b.colors || ['Black']
+      };
       const variantsMatrix = b.variants_matrix || b.variants || [];
       const sizeGuide = b.size_guide || null;
 
-      let insertedId = `prod-${Date.now()}`;
+      let savedProduct: any = null;
+
       if (sql) {
         try {
           const rows = await sql`
             INSERT INTO products (
-              name, slug, description, base_price, compare_at_price, category_id, subcategory_id,
+              name, slug, description, base_price, compare_at_price, cost_price, category_id, subcategory_id,
               brand, sku, fabric, fabric_composition, fabric_finish, fit, graphic_print,
               garment_specs, garment_care, shipping_delivery, model_size,
               meta_title, meta_description, meta_keywords, focus_keywords,
-              is_new_arrival, is_best_seller, is_featured,
-              badge, images, image_url, attributes, variants_matrix, size_guide, status, is_active
+              is_new_arrival, is_best_seller, is_featured, is_spotlight, is_draft,
+              track_inventory, low_stock_threshold, badge,
+              images, image_url, attributes, variants_matrix, size_guide, specs, status, is_active
             ) VALUES (
-              ${name}, ${slug}, ${b.description || ''}, ${basePrice}, ${comparePrice}, ${categoryId}, ${subcategoryId},
-              ${brand}, ${sku}, ${b.fabric || ''}, ${b.fabric_composition || ''}, ${b.fabric_finish || ''}, ${b.fit || ''}, ${b.graphic_print || ''},
-              ${b.garment_specs || ''}, ${b.garment_care || ''}, ${b.shipping_delivery || ''}, ${b.model_size || ''},
-              ${b.meta_title || ''}, ${b.meta_description || ''}, ${b.meta_keywords || ''}, ${b.focus_keywords || ''},
-              ${isNewArrival}, ${isBestSeller}, ${isFeatured},
-              ${b.badge || null}, ${JSON.stringify(images)}, ${images[0]},
-              ${JSON.stringify(attributes)}, ${JSON.stringify(variantsMatrix)}, ${sizeGuide ? JSON.stringify(sizeGuide) : null},
-              ${b.status || 'active'}, true
+              ${name}, ${slug}, ${b.description || ''}, ${basePrice}, ${comparePrice}, ${costPrice}, ${categoryId}, ${subcategoryId},
+              ${brand}, ${sku}, ${fabric}, ${fabricComposition}, ${fabricFinish}, ${fit}, ${graphicPrint},
+              ${garmentSpecs}, ${garmentCare}, ${shippingDelivery}, ${modelSize},
+              ${metaTitle}, ${metaDescription}, ${metaKeywords}, ${focusKeywords},
+              ${isNewArrival}, ${isBestSeller}, ${isFeatured}, ${isSpotlight}, ${isDraft},
+              ${trackInventory}, ${lowStockThreshold}, ${badge},
+              ${JSON.stringify(images)}, ${imageUrl}, ${JSON.stringify(attributes)}, ${JSON.stringify(variantsMatrix)},
+              ${sizeGuide ? JSON.stringify(sizeGuide) : null}, ${specs}, ${status}, ${isActive}
             )
-            RETURNING id
+            RETURNING *
           `;
-          if (rows && rows.length > 0) insertedId = rows[0].id;
-        } catch (e) {
+          if (rows && rows.length > 0) {
+            savedProduct = rows[0];
+          }
+        } catch (e: any) {
           console.error('Neon insert product error:', e);
+          if (e.message && e.message.includes('unique constraint') && e.message.includes('slug')) {
+            const uniqueSlug = `${slug}-${Date.now().toString().slice(-4)}`;
+            const rows = await sql`
+              INSERT INTO products (
+                name, slug, description, base_price, compare_at_price, cost_price, category_id, subcategory_id,
+                brand, sku, fabric, fabric_composition, fabric_finish, fit, graphic_print,
+                garment_specs, garment_care, shipping_delivery, model_size,
+                meta_title, meta_description, meta_keywords, focus_keywords,
+                is_new_arrival, is_best_seller, is_featured, is_spotlight, is_draft,
+                track_inventory, low_stock_threshold, badge,
+                images, image_url, attributes, variants_matrix, size_guide, specs, status, is_active
+              ) VALUES (
+                ${name}, ${uniqueSlug}, ${b.description || ''}, ${basePrice}, ${comparePrice}, ${costPrice}, ${categoryId}, ${subcategoryId},
+                ${brand}, ${sku}, ${fabric}, ${fabricComposition}, ${fabricFinish}, ${fit}, ${graphicPrint},
+                ${garmentSpecs}, ${garmentCare}, ${shippingDelivery}, ${modelSize},
+                ${metaTitle}, ${metaDescription}, ${metaKeywords}, ${focusKeywords},
+                ${isNewArrival}, ${isBestSeller}, ${isFeatured}, ${isSpotlight}, ${isDraft},
+                ${trackInventory}, ${lowStockThreshold}, ${badge},
+                ${JSON.stringify(images)}, ${imageUrl}, ${JSON.stringify(attributes)}, ${JSON.stringify(variantsMatrix)},
+                ${sizeGuide ? JSON.stringify(sizeGuide) : null}, ${specs}, ${status}, ${isActive}
+              )
+              RETURNING *
+            `;
+            if (rows && rows.length > 0) savedProduct = rows[0];
+          } else {
+            throw e;
+          }
         }
       }
 
-      const newProd: Product = {
-        id: insertedId,
-        name,
-        slug,
-        description: b.description || '',
-        base_price: basePrice,
-        compare_at_price: comparePrice,
-        is_active: true,
-        category_id: categoryId || 'cat-1',
-        subcategory_id: subcategoryId,
-        brand: brand,
-        sku: sku,
-        fabric: b.fabric || '',
-        fabric_composition: b.fabric_composition || '',
-        fabric_finish: b.fabric_finish || '',
-        fit: b.fit || '',
-        graphic_print: b.graphic_print || '',
-        garment_specs: b.garment_specs || '',
-        garment_care: b.garment_care || '',
-        shipping_delivery: b.shipping_delivery || '',
-        model_size: b.model_size || '',
-        meta_title: b.meta_title || '',
-        meta_description: b.meta_description || '',
-        meta_keywords: b.meta_keywords || '',
-        focus_keywords: b.focus_keywords || '',
-        is_new_arrival: isNewArrival,
-        is_bestseller: isBestSeller,
-        is_featured: isFeatured,
-        badge: b.badge || null,
-        images: images,
-        attributes: attributes,
-        variants_matrix: variantsMatrix,
-        size_guide: sizeGuide,
-        size_guide_enabled: b.size_guide_enabled ?? (sizeGuide ? true : false),
-        stock: b.stock || 50,
-        is_in_stock: true,
-        created_at: new Date().toISOString(),
-      };
-      productsStore.unshift(newProd);
+      if (!savedProduct) {
+        savedProduct = {
+          id: `prod-${Date.now()}`,
+          name, slug, description: b.description || '',
+          base_price: basePrice, compare_at_price: comparePrice, cost_price: costPrice,
+          category_id: categoryId || 'cat-1', subcategory_id: subcategoryId,
+          brand, sku, fabric, fabric_composition: fabricComposition, fabric_finish: fabricFinish, fit, graphic_print: graphicPrint,
+          garment_specs: garmentSpecs, garment_care: garmentCare, shipping_delivery: shippingDelivery, model_size: modelSize,
+          meta_title: metaTitle, meta_description: metaDescription, meta_keywords: metaKeywords, focus_keywords: focusKeywords,
+          is_new_arrival: isNewArrival, is_best_seller: isBestSeller, is_featured: isFeatured, is_spotlight: isSpotlight, is_draft: isDraft,
+          track_inventory: trackInventory, low_stock_threshold: lowStockThreshold, badge,
+          images, image_url: imageUrl, attributes, variants_matrix: variantsMatrix, size_guide: sizeGuide,
+          specs, status, is_active: isActive, created_at: new Date().toISOString()
+        };
+      }
+
+      productsStore.unshift(savedProduct);
+      logAdminAudit('Product Created', savedProduct.name, 'Admin', `Price: ${savedProduct.base_price}`);
       const catMap = new Map(categoriesStore.map((c) => [c.id, c]));
-      res.status(201).json(formatProduct(newProd, catMap));
+      return res.status(201).json(formatProduct(savedProduct, catMap));
     } catch (err: any) {
-      res.status(500).json({ message: 'Error creating product', error: err.message });
+      console.error('Create product error:', err);
+      res.status(500).json({ message: 'Error creating product: ' + err.message, error: err.message });
     }
   });
 
@@ -1515,48 +1609,105 @@ async function startServer() {
       const b = req.body;
       const images = Array.isArray(b.images) && b.images.length > 0 ? b.images : (b.image ? [b.image] : undefined);
       const attributes = b.attributes || (b.sizes || b.colors ? { sizes: b.sizes, colors: b.colors } : undefined);
+      const categoryId = b.category_id !== undefined ? resolveCategoryUuid(b.category_id) : undefined;
+      const subcategoryId = b.subcategory_id !== undefined ? resolveCategoryUuid(b.subcategory_id) : undefined;
+
+      const basePrice = (b.base_price !== undefined || b.price !== undefined)
+        ? Number(b.base_price !== undefined ? b.base_price : b.price)
+        : undefined;
+      const comparePrice = b.compare_at_price !== undefined
+        ? (b.compare_at_price !== null && b.compare_at_price !== '' ? Number(b.compare_at_price) : null)
+        : undefined;
+      const costPrice = b.cost_price !== undefined
+        ? (b.cost_price !== null && b.cost_price !== '' ? Number(b.cost_price) : null)
+        : undefined;
+
+      const isNewArrival = (b.is_new_arrival !== undefined || b.isNew !== undefined)
+        ? Boolean(b.is_new_arrival ?? b.isNew)
+        : undefined;
+      const isBestSeller = (b.is_best_seller !== undefined || b.is_bestseller !== undefined || b.isBestseller !== undefined)
+        ? Boolean(b.is_best_seller ?? b.is_bestseller ?? b.isBestseller)
+        : undefined;
+      const isFeatured = (b.is_featured !== undefined || b.isFeatured !== undefined)
+        ? Boolean(b.is_featured ?? b.isFeatured)
+        : undefined;
+      const isSpotlight = b.is_spotlight !== undefined ? Boolean(b.is_spotlight) : undefined;
+      const isDraft = b.is_draft !== undefined ? Boolean(b.is_draft) : undefined;
+      const status = b.status !== undefined ? b.status : undefined;
+      const isActive = b.is_active !== undefined ? Boolean(b.is_active) : (isDraft !== undefined ? !isDraft : undefined);
+      const trackInventory = b.track_inventory !== undefined ? Boolean(b.track_inventory) : undefined;
+      const lowStockThreshold = b.low_stock_threshold !== undefined ? Number(b.low_stock_threshold) : undefined;
+      const specs = b.specs !== undefined ? b.specs : (Array.isArray(b.details) ? b.details.join('\n') : undefined);
+
+      let updatedProduct: any = null;
 
       if (sql) {
         try {
-          await sql`
+          const rows = await sql`
             UPDATE products SET
-              name = COALESCE(${b.name}, name),
-              description = COALESCE(${b.description}, description),
-              base_price = COALESCE(${b.base_price !== undefined || b.price !== undefined ? Number(b.base_price || b.price) : null}, base_price),
-              compare_at_price = COALESCE(${b.compare_at_price !== undefined ? (b.compare_at_price ? Number(b.compare_at_price) : null) : null}, compare_at_price),
-              category_id = COALESCE(${b.category_id}, category_id),
-              subcategory_id = COALESCE(${b.subcategory_id}, subcategory_id),
-              brand = COALESCE(${b.brand}, brand),
-              sku = COALESCE(${b.sku}, sku),
-              fabric = COALESCE(${b.fabric}, fabric),
-              fabric_composition = COALESCE(${b.fabric_composition}, fabric_composition),
-              fabric_finish = COALESCE(${b.fabric_finish}, fabric_finish),
-              fit = COALESCE(${b.fit}, fit),
-              graphic_print = COALESCE(${b.graphic_print}, graphic_print),
-              garment_specs = COALESCE(${b.garment_specs}, garment_specs),
-              garment_care = COALESCE(${b.garment_care}, garment_care),
-              shipping_delivery = COALESCE(${b.shipping_delivery}, shipping_delivery),
-              model_size = COALESCE(${b.model_size}, model_size),
-              meta_title = COALESCE(${b.meta_title}, meta_title),
-              meta_description = COALESCE(${b.meta_description}, meta_description),
-              meta_keywords = COALESCE(${b.meta_keywords || b.focus_keywords}, meta_keywords),
-              is_new_arrival = COALESCE(${b.is_new_arrival ?? b.isNew}, is_new_arrival),
-              is_best_seller = COALESCE(${b.is_best_seller ?? b.is_bestseller ?? b.isBestseller}, is_best_seller),
-              is_featured = COALESCE(${b.is_featured ?? b.isFeatured}, is_featured),
-              badge = COALESCE(${b.badge}, badge),
+              name = COALESCE(${b.name ?? null}, name),
+              slug = COALESCE(${b.slug ?? null}, slug),
+              description = COALESCE(${b.description ?? null}, description),
+              base_price = COALESCE(${basePrice ?? null}, base_price),
+              compare_at_price = ${comparePrice !== undefined ? comparePrice : sql`compare_at_price`},
+              cost_price = ${costPrice !== undefined ? costPrice : sql`cost_price`},
+              category_id = ${categoryId !== undefined ? categoryId : sql`category_id`},
+              subcategory_id = ${subcategoryId !== undefined ? subcategoryId : sql`subcategory_id`},
+              brand = COALESCE(${b.brand ?? null}, brand),
+              sku = COALESCE(${b.sku ?? null}, sku),
+              fabric = COALESCE(${b.fabric ?? null}, fabric),
+              fabric_composition = COALESCE(${b.fabric_composition ?? null}, fabric_composition),
+              fabric_finish = COALESCE(${b.fabric_finish ?? null}, fabric_finish),
+              fit = COALESCE(${b.fit ?? null}, fit),
+              graphic_print = COALESCE(${b.graphic_print ?? null}, graphic_print),
+              garment_specs = COALESCE(${b.garment_specs ?? null}, garment_specs),
+              garment_care = COALESCE(${b.garment_care ?? null}, garment_care),
+              shipping_delivery = COALESCE(${b.shipping_delivery ?? null}, shipping_delivery),
+              model_size = COALESCE(${b.model_size ?? null}, model_size),
+              meta_title = COALESCE(${b.meta_title ?? null}, meta_title),
+              meta_description = COALESCE(${b.meta_description ?? null}, meta_description),
+              meta_keywords = COALESCE(${b.meta_keywords ?? b.focus_keywords ?? null}, meta_keywords),
+              focus_keywords = COALESCE(${b.focus_keywords ?? b.meta_keywords ?? null}, focus_keywords),
+              is_new_arrival = COALESCE(${isNewArrival ?? null}, is_new_arrival),
+              is_best_seller = COALESCE(${isBestSeller ?? null}, is_best_seller),
+              is_featured = COALESCE(${isFeatured ?? null}, is_featured),
+              is_spotlight = COALESCE(${isSpotlight ?? null}, is_spotlight),
+              is_draft = COALESCE(${isDraft ?? null}, is_draft),
+              track_inventory = COALESCE(${trackInventory ?? null}, track_inventory),
+              low_stock_threshold = COALESCE(${lowStockThreshold ?? null}, low_stock_threshold),
+              badge = ${b.badge !== undefined ? b.badge : sql`badge`},
               images = COALESCE(${images ? JSON.stringify(images) : null}, images),
               image_url = COALESCE(${images && images[0] ? images[0] : null}, image_url),
               attributes = COALESCE(${attributes ? JSON.stringify(attributes) : null}, attributes),
               variants_matrix = COALESCE(${b.variants_matrix ? JSON.stringify(b.variants_matrix) : null}, variants_matrix),
-              size_guide = COALESCE(${b.size_guide ? JSON.stringify(b.size_guide) : null}, size_guide),
-              status = COALESCE(${b.status}, status),
-              is_active = COALESCE(${b.is_active}, is_active),
+              size_guide = ${b.size_guide !== undefined ? (b.size_guide ? JSON.stringify(b.size_guide) : null) : sql`size_guide`},
+              specs = COALESCE(${specs ?? null}, specs),
+              status = COALESCE(${status ?? null}, status),
+              is_active = COALESCE(${isActive ?? null}, is_active),
               updated_at = NOW()
             WHERE id::text = ${id} OR slug = ${id}
+            RETURNING *
           `;
-        } catch (e) {
+          if (rows && rows.length > 0) {
+            updatedProduct = rows[0];
+          }
+        } catch (e: any) {
           console.error('Neon update product error:', e);
+          throw e;
         }
+      }
+
+      const catMap = new Map(categoriesStore.map((c) => [c.id, c]));
+
+      if (updatedProduct) {
+        const idx = productsStore.findIndex((p) => p.id === updatedProduct.id || p.slug === updatedProduct.slug || p.id === id || p.slug === id);
+        if (idx !== -1) {
+          productsStore[idx] = { ...productsStore[idx], ...updatedProduct };
+        } else {
+          productsStore.push(updatedProduct);
+        }
+        logAdminAudit('Product Updated', updatedProduct.name, 'Admin', `Price: ${updatedProduct.base_price}`);
+        return res.json(formatProduct(updatedProduct, catMap));
       }
 
       const index = productsStore.findIndex((p) => p.id === id || p.slug === id);
@@ -1570,15 +1721,15 @@ async function startServer() {
           ...(b.size_guide !== undefined ? { size_guide: b.size_guide } : {}),
           ...(b.size_guide_enabled !== undefined ? { size_guide_enabled: b.size_guide_enabled } : {}),
         };
-        const catMap = new Map(categoriesStore.map((c) => [c.id, c]));
         logAdminAudit('Product Updated', productsStore[index].name, 'Admin', `Price: ${productsStore[index].base_price}`);
         return res.json(formatProduct(productsStore[index], catMap));
       }
 
       logAdminAudit('Product Updated', id, 'Admin');
-      res.json({ success: true, message: 'Product updated' });
+      res.status(404).json({ message: 'Product not found' });
     } catch (err: any) {
-      res.status(500).json({ message: 'Error updating product', error: err.message });
+      console.error('Error updating product:', err);
+      res.status(500).json({ message: 'Error updating product: ' + err.message, error: err.message });
     }
   });
 
@@ -1785,8 +1936,20 @@ async function startServer() {
   const handleCategoryCreate = async (req: any, res: any) => {
     try {
       const b = req.body;
-      const slug = b.slug || b.name?.toLowerCase().replace(/\s+/g, '-') || `cat-${Date.now()}`;
-      let insertedId = `cat-${Date.now()}`;
+      const name = b.name;
+      if (!name) {
+        return res.status(400).json({ message: 'Category name is required' });
+      }
+      const slug = b.slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `cat-${Date.now()}`;
+      const parentId = resolveCategoryUuid(b.parent_id);
+      const sortOrder = Number(b.sort_order) || 0;
+      const isFeatured = Boolean(b.is_featured_in_focus);
+      const displayOrderInFocus = Number(b.display_order_in_focus) || 0;
+      const isWarmChapter = Boolean(b.is_warm_chapter);
+      const displayOrderWarmChapter = Number(b.display_order_warm_chapter) || 0;
+      const isActive = b.is_active !== undefined ? Boolean(b.is_active) : true;
+
+      let savedCat: any = null;
 
       if (sql) {
         try {
@@ -1795,39 +1958,65 @@ async function startServer() {
               name, slug, description, badge, tag, cover_image_url, parent_id, sort_order,
               is_active, is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter
             ) VALUES (
-              ${b.name}, ${slug}, ${b.description || ''}, ${b.badge || null}, ${b.tag || null},
-              ${b.cover_image_url || null}, ${b.parent_id || null}, ${Number(b.sort_order) || 0},
-              true, ${Boolean(b.is_featured_in_focus)}, ${Number(b.display_order_in_focus) || 0},
-              ${Boolean(b.is_warm_chapter)}, ${Number(b.display_order_warm_chapter) || 0}
+              ${name}, ${slug}, ${b.description || ''}, ${b.badge || null}, ${b.tag || null},
+              ${b.cover_image_url || null}, ${parentId}, ${sortOrder},
+              ${isActive}, ${isFeatured}, ${displayOrderInFocus},
+              ${isWarmChapter}, ${displayOrderWarmChapter}
             )
-            RETURNING id
+            RETURNING *
           `;
-          if (rows && rows.length > 0) insertedId = rows[0].id;
-        } catch (e) {
+          if (rows && rows.length > 0) {
+            savedCat = rows[0];
+          }
+        } catch (e: any) {
           console.error('Neon insert category error:', e);
+          if (e.message && e.message.includes('unique constraint') && e.message.includes('slug')) {
+            const uniqueSlug = `${slug}-${Date.now().toString().slice(-4)}`;
+            const rows = await sql`
+              INSERT INTO categories (
+                name, slug, description, badge, tag, cover_image_url, parent_id, sort_order,
+                is_active, is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter
+              ) VALUES (
+                ${name}, ${uniqueSlug}, ${b.description || ''}, ${b.badge || null}, ${b.tag || null},
+                ${b.cover_image_url || null}, ${parentId}, ${sortOrder},
+                ${isActive}, ${isFeatured}, ${displayOrderInFocus},
+                ${isWarmChapter}, ${displayOrderWarmChapter}
+              )
+              RETURNING *
+            `;
+            if (rows && rows.length > 0) savedCat = rows[0];
+          } else {
+            throw e;
+          }
         }
       }
 
-      const newCat = {
-        id: insertedId,
-        name: b.name,
-        slug: slug,
-        description: b.description || '',
-        badge: b.badge || null,
-        tag: b.tag || null,
-        cover_image_url: b.cover_image_url || '',
-        parent_id: b.parent_id || null,
-        sort_order: Number(b.sort_order) || 0,
-        is_active: true,
-        is_featured_in_focus: Boolean(b.is_featured_in_focus),
-        display_order_in_focus: Number(b.display_order_in_focus) || 0,
-        is_warm_chapter: Boolean(b.is_warm_chapter),
-        display_order_warm_chapter: Number(b.display_order_warm_chapter) || 0,
-      };
-      categoriesStore.push(newCat as any);
-      res.status(201).json(newCat);
+      if (!savedCat) {
+        savedCat = {
+          id: `cat-${Date.now()}`,
+          name,
+          slug,
+          description: b.description || '',
+          badge: b.badge || null,
+          tag: b.tag || null,
+          cover_image_url: b.cover_image_url || '',
+          parent_id: parentId,
+          sort_order: sortOrder,
+          is_active: isActive,
+          is_featured_in_focus: isFeatured,
+          display_order_in_focus: displayOrderInFocus,
+          is_warm_chapter: isWarmChapter,
+          display_order_warm_chapter: displayOrderWarmChapter,
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      categoriesStore.push(savedCat);
+      logAdminAudit('Category Created', savedCat.name, 'Admin', `Slug: ${savedCat.slug}`);
+      res.status(201).json(savedCat);
     } catch (err: any) {
-      res.status(500).json({ message: 'Error creating category', error: err.message });
+      console.error('Create category error:', err);
+      res.status(500).json({ message: 'Error creating category: ' + err.message, error: err.message });
     }
   };
 
@@ -1838,18 +2027,20 @@ async function startServer() {
     try {
       const { id } = req.params;
       const b = req.body;
+      const parentId = b.parent_id !== undefined ? resolveCategoryUuid(b.parent_id) : undefined;
+      let updatedCat: any = null;
 
       if (sql) {
         try {
-          await sql`
+          const rows = await sql`
             UPDATE categories SET
-              name = COALESCE(${b.name}, name),
-              slug = COALESCE(${b.slug}, slug),
-              description = COALESCE(${b.description}, description),
-              badge = COALESCE(${b.badge}, badge),
-              tag = COALESCE(${b.tag}, tag),
-              cover_image_url = COALESCE(${b.cover_image_url}, cover_image_url),
-              parent_id = COALESCE(${b.parent_id !== undefined ? (b.parent_id || null) : null}, parent_id),
+              name = COALESCE(${b.name ?? null}, name),
+              slug = COALESCE(${b.slug ?? null}, slug),
+              description = COALESCE(${b.description ?? null}, description),
+              badge = ${b.badge !== undefined ? b.badge : sql`badge`},
+              tag = ${b.tag !== undefined ? b.tag : sql`tag`},
+              cover_image_url = ${b.cover_image_url !== undefined ? (b.cover_image_url || null) : sql`cover_image_url`},
+              parent_id = ${parentId !== undefined ? parentId : sql`parent_id`},
               sort_order = COALESCE(${b.sort_order !== undefined ? Number(b.sort_order) : null}, sort_order),
               is_active = COALESCE(${b.is_active !== undefined ? Boolean(b.is_active) : null}, is_active),
               is_featured_in_focus = COALESCE(${b.is_featured_in_focus !== undefined ? Boolean(b.is_featured_in_focus) : null}, is_featured_in_focus),
@@ -1858,10 +2049,26 @@ async function startServer() {
               display_order_warm_chapter = COALESCE(${b.display_order_warm_chapter !== undefined ? Number(b.display_order_warm_chapter) : null}, display_order_warm_chapter),
               updated_at = NOW()
             WHERE id::text = ${id} OR slug = ${id}
+            RETURNING *
           `;
-        } catch (e) {
+          if (rows && rows.length > 0) {
+            updatedCat = rows[0];
+          }
+        } catch (e: any) {
           console.error('Neon update category error:', e);
+          throw e;
         }
+      }
+
+      if (updatedCat) {
+        const idx = categoriesStore.findIndex((c) => c.id === updatedCat.id || c.slug === updatedCat.slug || c.id === id || c.slug === id);
+        if (idx !== -1) {
+          categoriesStore[idx] = { ...categoriesStore[idx], ...updatedCat };
+        } else {
+          categoriesStore.push(updatedCat);
+        }
+        logAdminAudit('Category Updated', updatedCat.name, 'Admin', `Fields updated: ${Object.keys(b).join(', ')}`);
+        return res.json(categoriesStore[idx !== -1 ? idx : categoriesStore.length - 1]);
       }
 
       const index = categoriesStore.findIndex((c) => c.id === id || c.slug === id);
@@ -1870,10 +2077,12 @@ async function startServer() {
         logAdminAudit('Category Updated', categoriesStore[index].name, 'Admin', `Fields updated: ${Object.keys(b).join(', ')}`);
         return res.json(categoriesStore[index]);
       }
+
       logAdminAudit('Category Updated', id, 'Admin');
-      res.json({ success: true, message: 'Category updated' });
+      res.status(404).json({ message: 'Category not found' });
     } catch (err: any) {
-      res.status(500).json({ message: 'Error updating category', error: err.message });
+      console.error('Update category error:', err);
+      res.status(500).json({ message: 'Error updating category: ' + err.message, error: err.message });
     }
   });
 
@@ -2552,28 +2761,35 @@ async function startServer() {
 
   // ==================== NOTIFICATIONS ROUTES ====================
   app.get('/api/admin/notifications', (req, res) => {
-    // Dynamic stock checks for automatic alerts (threshold: 5)
-    const lowStockItems = productsStore.filter(p => {
-      const stock = (p as any).stockCount ?? p.stock ?? 50;
-      return stock <= 5;
-    });
+    try {
+      // Dynamic stock checks for automatic alerts (threshold: 5)
+      const lowStockItems = (productsStore || []).filter(p => {
+        if (!p) return false;
+        const stock = (p as any).stockCount ?? (p as any).stock ?? 50;
+        return typeof stock === 'number' && stock <= 5;
+      });
 
-    lowStockItems.forEach(item => {
-      const exists = adminNotificationsStore.some(n => n.type === 'stock' && n.message.includes(item.name));
-      if (!exists) {
-        adminNotificationsStore.unshift({
-          id: `notif-stock-${item.id}`,
-          title: 'Critical Low Stock',
-          message: `${item.name} has only ${(item as any).stockCount ?? item.stock ?? 0} units left (threshold: 5).`,
-          type: 'stock',
-          is_read: false,
-          created_at: new Date().toISOString(),
-          link: 'inventory'
-        });
-      }
-    });
+      lowStockItems.forEach(item => {
+        if (!item || !item.name) return;
+        const exists = adminNotificationsStore.some(n => n && n.type === 'stock' && n.message && n.message.includes(item.name));
+        if (!exists) {
+          adminNotificationsStore.unshift({
+            id: `notif-stock-${item.id || Date.now()}`,
+            title: 'Critical Low Stock',
+            message: `${item.name} has only ${(item as any).stockCount ?? item.stock ?? 0} units left (threshold: 5).`,
+            type: 'stock',
+            is_read: false,
+            created_at: new Date().toISOString(),
+            link: 'inventory'
+          });
+        }
+      });
 
-    res.json(adminNotificationsStore);
+      res.json(adminNotificationsStore || []);
+    } catch (err: any) {
+      console.error('Error fetching admin notifications:', err);
+      res.json(adminNotificationsStore || []);
+    }
   });
 
   app.put('/api/admin/notifications/:id/read', (req, res) => {
@@ -2592,6 +2808,9 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  // Sync initial memory stores with Neon DB if connected
+  await syncStoresFromNeon();
+
   // ==================== VITE SPA / STATIC MIDDLEWARE ====================
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -2603,7 +2822,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get(/.*/, (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

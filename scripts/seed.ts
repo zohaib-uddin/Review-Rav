@@ -514,7 +514,7 @@ async function seed() {
         name, slug, description, base_price, compare_at_price, category_id,
         fabric, fabric_composition, fabric_finish, fit, graphic_print,
         garment_specs, garment_care, shipping_delivery, model_size,
-        sku, is_new_arrival, is_bestseller, is_featured,
+        sku, is_new_arrival, is_best_seller, is_featured,
         badge, images, image_url, attributes, status, is_active
       ) VALUES (
         ${product.name}, ${product.slug}, ${product.description}, ${product.base_price},
@@ -522,7 +522,7 @@ async function seed() {
         ${product.fabric_finish}, ${product.fit}, ${product.graphic_print},
         ${product.garment_specs}, ${product.garment_care}, ${product.shipping_delivery},
         ${product.model_size}, ${product.sku}, ${product.is_new_arrival}, ${product.is_best_seller},
-        ${product.badge},
+        ${product.is_featured}, ${product.badge},
         ${JSON.stringify(product.images)}, ${product.images[0]},
         ${JSON.stringify(product.attributes)}, 'active', true
       )
