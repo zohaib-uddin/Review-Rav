@@ -11,6 +11,7 @@ import {
   RefreshCw, SlidersHorizontal, Bell, Check
 } from 'lucide-react';
 import { useStore, Product, Order } from '../../store/useStore';
+import { api } from '../../services/api';
 import ProductForm from '../../components/admin/ProductForm';
 import {
   AdminProducts,
@@ -70,19 +71,18 @@ export default function AdminPanel() {
 
   const fetchNotifications = async () => {
     try {
-      const res = await fetch('/api/admin/notifications');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.getNotifications();
+      if (Array.isArray(data)) {
         setNotifications(data);
       }
     } catch (e) {
-      console.error('Failed to fetch notifications:', e);
+      console.warn('Failed to fetch notifications:', e);
     }
   };
 
   const markNotificationRead = async (id: string) => {
     try {
-      await fetch(`/api/admin/notifications/${id}/read`, { method: 'PUT' });
+      await api.markNotificationRead(id);
       setNotifications(prev => prev.map(n => id === 'all' || n.id === id ? { ...n, is_read: true } : n));
     } catch (e) {
       console.error(e);
