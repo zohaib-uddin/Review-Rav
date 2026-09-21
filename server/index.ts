@@ -309,6 +309,7 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
     const basePrice = parseFloat(product.base_price || product.price || 0);
     const compareAtPrice = product.compare_at_price || product.salePrice ? parseFloat(product.compare_at_price || product.salePrice) : null;
     const categoryId = (product.category_id && String(product.category_id).length > 10) ? product.category_id : null;
+    const subcategoryId = (product.subcategory_id && String(product.subcategory_id).length > 10) ? product.subcategory_id : null;
     const fabric = product.fabric || null;
     const fit = product.fit || null;
     const sku = product.sku || `RVZ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -329,25 +330,43 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
     });
 
     const fabricComposition = product.fabric_composition || null;
+    const fabricFinish = product.fabric_finish || null;
+    const garmentCare = product.garment_care || null;
+    const shippingDelivery = product.shipping_delivery || null;
+    const modelSize = product.model_size || null;
+    const metaTitle = product.meta_title || null;
+    const metaDescription = product.meta_description || null;
+    const metaKeywords = product.meta_keywords || product.focus_keywords || null;
+    const canonicalUrl = product.canonical_url || null;
     const graphicPrint = product.graphic_print || null;
     const garmentSpecs = product.garment_specs || null;
     const status = product.status || 'active';
     const isActive = product.is_active !== false && !product.is_draft;
+    
+    // Variants matrix and size guide
+    const variantsMatrixJson = product.variants_matrix ? JSON.stringify(product.variants_matrix) : '[]';
+    const sizeGuideJson = product.size_guide ? JSON.stringify(product.size_guide) : null;
+    const costPrice = product.cost_price ? parseFloat(product.cost_price) : null;
 
     const result = await sql`
       INSERT INTO products (
-        name, slug, description, base_price, compare_at_price, category_id,
-        fabric, fit, sku, is_new_arrival, is_best_seller, is_featured,
+        name, slug, description, base_price, compare_at_price, cost_price, category_id, subcategory_id,
+        fabric, fabric_finish, fit, sku, is_new_arrival, is_best_seller, is_featured,
         badge, images, image_url, attributes, fabric_composition, graphic_print,
-        garment_specs, status, is_active
+        garment_specs, garment_care, shipping_delivery, model_size,
+        meta_title, meta_description, meta_keywords, canonical_url,
+        status, is_active, variants_matrix, size_guide
       ) VALUES (
         ${name}, ${slug}, ${description}, ${basePrice},
-        ${compareAtPrice}, ${categoryId}, ${fabric}, ${fit},
+        ${compareAtPrice}, ${costPrice}, ${categoryId}, ${subcategoryId},
+        ${fabric}, ${fabricFinish}, ${fit},
         ${sku}, ${isNewArrival}, ${isBestSeller},
         ${isFeatured}, ${badge},
         ${imagesJson}, ${imageUrl},
         ${attributesJson}, ${fabricComposition},
-        ${graphicPrint}, ${garmentSpecs}, ${status}, ${isActive}
+        ${graphicPrint}, ${garmentSpecs}, ${garmentCare}, ${shippingDelivery}, ${modelSize},
+        ${metaTitle}, ${metaDescription}, ${metaKeywords}, ${canonicalUrl},
+        ${status}, ${isActive}, ${variantsMatrixJson}, ${sizeGuideJson}
       )
       RETURNING *
     `;
@@ -405,6 +424,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
     const basePrice = product.base_price !== undefined ? parseFloat(product.base_price) : (product.price !== undefined ? parseFloat(product.price) : undefined);
     const compareAtPrice = product.compare_at_price !== undefined ? (product.compare_at_price ? parseFloat(product.compare_at_price) : null) : (product.salePrice !== undefined ? (product.salePrice ? parseFloat(product.salePrice) : null) : undefined);
     const categoryId = (product.category_id && String(product.category_id).length > 10) ? product.category_id : null;
+    const subcategoryId = (product.subcategory_id && String(product.subcategory_id).length > 10) ? product.subcategory_id : null;
     const fabric = product.fabric;
     const fit = product.fit;
     const sku = product.sku;
@@ -419,10 +439,23 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
 
     const attributesJson = product.attributes ? JSON.stringify(product.attributes) : undefined;
     const fabricComposition = product.fabric_composition;
+    const fabricFinish = product.fabric_finish;
+    const garmentCare = product.garment_care;
+    const shippingDelivery = product.shipping_delivery;
+    const modelSize = product.model_size;
+    const metaTitle = product.meta_title;
+    const metaDescription = product.meta_description;
+    const metaKeywords = product.meta_keywords || product.focus_keywords;
+    const canonicalUrl = product.canonical_url;
     const graphicPrint = product.graphic_print;
     const garmentSpecs = product.garment_specs;
     const status = product.status;
     const isActive = product.is_active !== undefined ? product.is_active : (product.is_draft !== undefined ? !product.is_draft : undefined);
+    
+    // Variants matrix and size guide
+    const variantsMatrixJson = product.variants_matrix ? JSON.stringify(product.variants_matrix) : undefined;
+    const sizeGuideJson = product.size_guide ? JSON.stringify(product.size_guide) : undefined;
+    const costPrice = product.cost_price !== undefined ? (product.cost_price ? parseFloat(product.cost_price) : null) : undefined;
 
     const result = await sql`
       UPDATE products SET
@@ -432,7 +465,9 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
         base_price = COALESCE(${basePrice}, base_price),
         compare_at_price = ${compareAtPrice},
         category_id = COALESCE(${categoryId}, category_id),
+        subcategory_id = COALESCE(${subcategoryId}, subcategory_id),
         fabric = COALESCE(${fabric}, fabric),
+        fabric_finish = COALESCE(${fabricFinish}, fabric_finish),
         fit = COALESCE(${fit}, fit),
         sku = COALESCE(${sku}, sku),
         is_new_arrival = COALESCE(${isNewArrival}, is_new_arrival),
@@ -443,10 +478,20 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
         image_url = COALESCE(${imageUrl}, image_url),
         attributes = COALESCE(${attributesJson}::jsonb, attributes),
         fabric_composition = COALESCE(${fabricComposition}, fabric_composition),
+        garment_care = COALESCE(${garmentCare}, garment_care),
+        shipping_delivery = COALESCE(${shippingDelivery}, shipping_delivery),
+        model_size = COALESCE(${modelSize}, model_size),
+        meta_title = COALESCE(${metaTitle}, meta_title),
+        meta_description = COALESCE(${metaDescription}, meta_description),
+        meta_keywords = COALESCE(${metaKeywords}, meta_keywords),
+        canonical_url = COALESCE(${canonicalUrl}, canonical_url),
         graphic_print = COALESCE(${graphicPrint}, graphic_print),
         garment_specs = COALESCE(${garmentSpecs}, garment_specs),
         status = COALESCE(${status}, status),
         is_active = COALESCE(${isActive}, is_active),
+        variants_matrix = COALESCE(${variantsMatrixJson}::jsonb, variants_matrix),
+        size_guide = COALESCE(${sizeGuideJson}::jsonb, size_guide),
+        cost_price = ${costPrice},
         updated_at = NOW()
       WHERE id::text = ${id} OR slug = ${id}
       RETURNING *
@@ -514,6 +559,48 @@ app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) =
 
 // ==================== CATEGORIES ROUTES ====================
 
+// Create category (Admin only)
+app.post('/api/categories', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { name, slug, description, badge, tag, cover_image_url, parent_id, sort_order, is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter } = req.body;
+    
+    // Validate max 4 featured categories
+    if (is_featured_in_focus === true) {
+      const featuredCount = await sql`
+        SELECT COUNT(*) as count FROM categories 
+        WHERE is_featured_in_focus = true
+      `;
+      
+      if (parseInt(featuredCount[0].count) >= 4) {
+        return res.status(400).json({ 
+          message: 'Maximum 4 categories can be featured in Collections in Focus' 
+        });
+      }
+    }
+    
+    const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
+    
+    const result = await sql`
+      INSERT INTO categories (
+        name, slug, description, badge, tag, cover_image_url, parent_id, sort_order,
+        is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter, is_active
+      ) VALUES (
+        ${name}, ${finalSlug}, ${description || null}, ${badge || null}, ${tag || null},
+        ${cover_image_url || null}, ${parent_id || null}, ${sort_order || 0},
+        ${is_featured_in_focus || false}, ${display_order_in_focus || 0},
+        ${is_warm_chapter || false}, ${display_order_warm_chapter || 0}, true
+      )
+      RETURNING *
+    `;
+    
+    console.log(`✅ Category created: ${result[0].name}`);
+    res.json(result[0]);
+  } catch (error: any) {
+    console.error('❌ Create category error:', error);
+    res.status(500).json({ message: 'Server error creating category', error: error.message });
+  }
+});
+
 app.get('/api/categories', async (req, res) => {
   try {
     console.log('📂 Fetching categories from database...');
@@ -521,7 +608,7 @@ app.get('/api/categories', async (req, res) => {
     const categories = await sql`
       SELECT * FROM categories 
       WHERE is_active = true 
-      ORDER BY sort_order ASC
+      ORDER BY sort_order ASC, parent_id ASC
     `;
     
     console.log(`✅ Found ${categories.length} categories`);
@@ -616,7 +703,7 @@ app.get('/api/warm-chapters', async (req, res) => {
 app.put('/api/categories/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const { is_featured_in_focus, display_order_in_focus, ...otherFields } = req.body;
+    const { is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter, ...otherFields } = req.body;
     
     // Validate max 4 featured categories if enabling is_featured_in_focus
     if (is_featured_in_focus === true) {
@@ -640,14 +727,19 @@ app.put('/api/categories/:id', authenticateToken, adminOnly, async (req, res) =>
         cover_image_url = COALESCE(${otherFields.cover_image_url || otherFields.image_url}, cover_image_url),
         badge = COALESCE(${otherFields.badge}, badge),
         tag = COALESCE(${otherFields.tag}, tag),
+        parent_id = COALESCE(${otherFields.parent_id}, parent_id),
+        sort_order = COALESCE(${otherFields.sort_order}, sort_order),
         is_active = COALESCE(${otherFields.is_active}, is_active),
         is_featured_in_focus = COALESCE(${is_featured_in_focus}, is_featured_in_focus),
         display_order_in_focus = COALESCE(${display_order_in_focus}, display_order_in_focus),
+        is_warm_chapter = COALESCE(${is_warm_chapter}, is_warm_chapter),
+        display_order_warm_chapter = COALESCE(${display_order_warm_chapter}, display_order_warm_chapter),
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *
     `;
     
+    console.log(`✅ Category updated: ${updated[0]?.name}`);
     res.json(updated[0]);
   } catch (error: any) {
     console.error('❌ Update category error:', error);
