@@ -1,278 +1,193 @@
-import { useState } from 'react';
-import { Mail, Send, Plus, Eye, Edit, Trash2, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Mail, Send, Users, Plus } from 'lucide-react';
 
 interface Campaign {
   id: string;
-  name: string;
   subject: string;
-  status: 'draft' | 'scheduled' | 'sent';
-  recipients: number;
-  sentAt?: string;
-  scheduledAt?: string;
-  openRate?: number;
-  clickRate?: number;
+  target_audience: string;
+  sent_count: number;
+  status: string;
+  created_at: string;
 }
 
 export default function EmailMarketing() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([
-    {
-      id: '1',
-      name: 'Winter Collection Launch',
-      subject: 'New Winter Collection is Here! 🎉',
-      status: 'sent',
-      recipients: 1250,
-      sentAt: '2024-01-10T10:00:00Z',
-      openRate: 45,
-      clickRate: 12,
-    },
-    {
-      id: '2',
-      name: 'Flash Sale Announcement',
-      subject: 'Flash Sale: 30% Off Everything! ⚡',
-      status: 'scheduled',
-      recipients: 1500,
-      scheduledAt: '2024-01-20T14:00:00Z',
-    },
-    {
-      id: '3',
-      name: 'New Year Special',
-      subject: 'Start 2024 in Style 🎊',
-      status: 'draft',
-      recipients: 0,
-    },
-  ]);
-
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newCampaign, setNewCampaign] = useState({
-    name: '',
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [formData, setFormData] = useState({
     subject: '',
     content: '',
-    recipients: 'all',
+    target_audience: 'all'
   });
+  const [sending, setSending] = useState(false);
 
-  const handleCreateCampaign = () => {
-    const campaign: Campaign = {
-      id: Date.now().toString(),
-      name: newCampaign.name,
-      subject: newCampaign.subject,
-      status: 'draft',
-      recipients: 0,
-    };
-    setCampaigns([...campaigns, campaign]);
-    setShowCreateModal(false);
-    setNewCampaign({ name: '', subject: '', content: '', recipients: 'all' });
-  };
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
 
-  const handleDeleteCampaign = (id: string) => {
-    if (confirm('Are you sure you want to delete this campaign?')) {
-      setCampaigns(campaigns.filter(c => c.id !== id));
+  const fetchCampaigns = async () => {
+    try {
+      const response = await fetch('/api/admin/email-campaigns');
+      const data = await response.json();
+      setCampaigns(data);
+    } catch (error) {
+      console.error('Failed to fetch campaigns:', error);
     }
   };
 
-  const handleSendCampaign = (id: string) => {
-    if (confirm('Are you sure you want to send this campaign now?')) {
-      setCampaigns(campaigns.map(c => 
-        c.id === id 
-          ? { ...c, status: 'sent' as const, sentAt: new Date().toISOString(), recipients: 1500 }
-          : c
-      ));
-      alert('Campaign sent successfully!');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+
+    try {
+      const response = await fetch('/api/admin/email-campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        alert('Campaign created! Emails will be sent via Google Apps Script.');
+        setShowCreateForm(false);
+        setFormData({ subject: '', content: '', target_audience: 'all' });
+        fetchCampaigns();
+      }
+    } catch (error) {
+      console.error('Failed to create campaign:', error);
+      alert('Failed to create campaign');
+    } finally {
+      setSending(false);
     }
   };
-
-  const draftCount = campaigns.filter(c => c.status === 'draft').length;
-  const scheduledCount = campaigns.filter(c => c.status === 'scheduled').length;
-  const sentCount = campaigns.filter(c => c.status === 'sent').length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">Email Marketing</h2>
-          <p className="text-sm text-gray-500 mt-1">Create and manage email campaigns</p>
+          <p className="text-sm text-gray-500 mt-1">Send campaigns to customers and subscribers</p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800"
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800"
         >
           <Plus size={18} />
           Create Campaign
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-xl border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500">Draft Campaigns</span>
-            <Edit className="text-gray-400" size={20} />
-          </div>
-          <p className="text-2xl font-bold">{draftCount}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500">Scheduled</span>
-            <Calendar className="text-blue-600" size={20} />
-          </div>
-          <p className="text-2xl font-bold">{scheduledCount}</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl border">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500">Sent</span>
-            <Send className="text-green-600" size={20} />
-          </div>
-          <p className="text-2xl font-bold">{sentCount}</p>
-        </div>
-      </div>
-
-      {/* Campaigns List */}
-      <div className="bg-white rounded-xl border overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left p-4 text-sm font-medium">Campaign Name</th>
-              <th className="text-left p-4 text-sm font-medium">Subject</th>
-              <th className="text-left p-4 text-sm font-medium">Status</th>
-              <th className="text-left p-4 text-sm font-medium">Recipients</th>
-              <th className="text-left p-4 text-sm font-medium">Performance</th>
-              <th className="text-left p-4 text-sm font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.map((campaign) => (
-              <tr key={campaign.id} className="border-b hover:bg-gray-50">
-                <td className="p-4">
-                  <p className="font-medium">{campaign.name}</p>
-                  {campaign.sentAt && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Sent: {new Date(campaign.sentAt).toLocaleDateString()}
-                    </p>
-                  )}
-                  {campaign.scheduledAt && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Scheduled: {new Date(campaign.scheduledAt).toLocaleDateString()}
-                    </p>
-                  )}
-                </td>
-                <td className="p-4 text-sm text-gray-600">{campaign.subject}</td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                    campaign.status === 'sent' ? 'bg-green-100 text-green-700' :
-                    campaign.status === 'scheduled' ? 'bg-blue-100 text-blue-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
-                  </span>
-                </td>
-                <td className="p-4 text-sm">{campaign.recipients.toLocaleString()}</td>
-                <td className="p-4">
-                  {campaign.openRate !== undefined ? (
-                    <div className="text-sm">
-                      <p>Open: <span className="font-medium">{campaign.openRate}%</span></p>
-                      <p>Click: <span className="font-medium">{campaign.clickRate}%</span></p>
-                    </div>
-                  ) : (
-                    <span className="text-sm text-gray-400">-</span>
-                  )}
-                </td>
-                <td className="p-4">
-                  <div className="flex gap-2">
-                    {campaign.status === 'draft' && (
-                      <button
-                        onClick={() => handleSendCampaign(campaign.id)}
-                        className="p-2 bg-green-500 text-white rounded hover:bg-green-600"
-                        title="Send Now"
-                      >
-                        <Send size={16} />
-                      </button>
-                    )}
-                    <button
-                      className="p-2 hover:bg-gray-100 rounded"
-                      title="Preview"
-                    >
-                      <Eye size={16} className="text-gray-600" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCampaign(campaign.id)}
-                      className="p-2 hover:bg-red-50 rounded"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} className="text-red-600" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Create Campaign Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl">
-            <h3 className="text-xl font-bold mb-4">Create New Campaign</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Campaign Name</label>
-                <input
-                  type="text"
-                  value={newCampaign.name}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, name: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
-                  placeholder="e.g., Summer Collection Launch"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Subject Line</label>
-                <input
-                  type="text"
-                  value={newCampaign.subject}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, subject: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
-                  placeholder="e.g., New Summer Collection is Here!"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Email Content</label>
-                <textarea
-                  value={newCampaign.content}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, content: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg h-40"
-                  placeholder="Write your email content here..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Recipients</label>
-                <select
-                  value={newCampaign.recipients}
-                  onChange={(e) => setNewCampaign({ ...newCampaign, recipients: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg"
-                >
-                  <option value="all">All Subscribers (1,500)</option>
-                  <option value="active">Active Customers (800)</option>
-                  <option value="inactive">Inactive Customers (700)</option>
-                </select>
-              </div>
+      {showCreateForm && (
+        <div className="bg-white p-6 rounded-xl border mb-6">
+          <h3 className="font-bold mb-4">Create New Campaign</h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Subject</label>
+              <input
+                type="text"
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                className="w-full px-4 py-2 border rounded-lg"
+                placeholder="Enter email subject"
+                required
+              />
             </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={handleCreateCampaign}
-                className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800"
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Target Audience</label>
+              <select
+                value={formData.target_audience}
+                onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
+                className="w-full px-4 py-2 border rounded-lg"
               >
-                Create Campaign
+                <option value="all">All Users (Customers + Subscribers)</option>
+                <option value="active_customers">Active Customers Only</option>
+                <option value="inactive_customers">Inactive Customers</option>
+                <option value="subscribers">Newsletter Subscribers Only</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Email Content</label>
+              <textarea
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                className="w-full px-4 py-2 border rounded-lg h-48"
+                placeholder="Write your email content here..."
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Note: Email will be sent via Google Apps Script with proper HTML formatting
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={sending}
+                className="flex items-center gap-2 bg-black text-white px-6 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50"
+              >
+                <Send size={18} />
+                {sending ? 'Creating...' : 'Create & Send Campaign'}
               </button>
               <button
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 px-4 py-2 border border-black rounded-lg hover:bg-gray-50"
+                type="button"
+                onClick={() => setShowCreateForm(false)}
+                className="px-6 py-2 border rounded-lg hover:bg-gray-50"
               >
                 Cancel
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
+
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="p-6">
+          <h3 className="font-bold mb-4">Recent Campaigns</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left p-4 text-sm font-medium">Subject</th>
+                <th className="text-left p-4 text-sm font-medium">Target Audience</th>
+                <th className="text-left p-4 text-sm font-medium">Sent Count</th>
+                <th className="text-left p-4 text-sm font-medium">Status</th>
+                <th className="text-left p-4 text-sm font-medium">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.map(campaign => (
+                <tr key={campaign.id} className="border-b hover:bg-gray-50">
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <Mail size={16} className="text-gray-400" />
+                      <span className="text-sm">{campaign.subject}</span>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <span className="text-xs px-2 py-1 bg-gray-100 rounded">
+                      {campaign.target_audience.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td className="p-4 text-sm">{campaign.sent_count}</td>
+                  <td className="p-4">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      campaign.status === 'completed' ? 'bg-green-100 text-green-700' :
+                      campaign.status === 'sending' ? 'bg-blue-100 text-blue-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {campaign.status}
+                    </span>
+                  </td>
+                  <td className="p-4 text-sm text-gray-600">
+                    {new Date(campaign.created_at).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
