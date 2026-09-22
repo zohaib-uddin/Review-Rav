@@ -197,6 +197,85 @@ class ApiService {
     return this.request<any[]>(`/admin/audit-logs?${searchParams.toString()}`);
   }
 
+  async logAudit(action: string, entity: string, user?: string, details?: string) {
+    try {
+      return await this.request<any>('/admin/audit-logs', {
+        method: 'POST',
+        body: JSON.stringify({ action, entity, user, details }),
+      });
+    } catch {
+      // Fire-and-forget logging
+      return null;
+    }
+  }
+
+  // Admin Reviews
+  async getAdminReviews() {
+    return this.request<any[]>('/reviews?all=true');
+  }
+
+  async updateReviewApproval(id: string, is_approved: boolean) {
+    return this.request<any>(`/reviews/${id}/approval`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_approved }),
+    });
+  }
+
+  async deleteReview(id: string) {
+    return this.request<any>(`/reviews/${id}`, { method: 'DELETE' });
+  }
+
+  // Newsletter
+  async getNewsletterSubscribers() {
+    return this.request<any[]>('/newsletter');
+  }
+
+  async updateNewsletterSubscriber(id: string, is_active: boolean) {
+    return this.request<any>(`/newsletter/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active }),
+    });
+  }
+
+  async deleteNewsletterSubscriber(id: string) {
+    return this.request<any>(`/newsletter/${id}`, { method: 'DELETE' });
+  }
+
+  // Email Campaigns
+  async getEmailCampaigns() {
+    return this.request<any[]>('/email-campaigns');
+  }
+
+  async createEmailCampaign(data: { name?: string; subject: string; content: string; target_audience?: string }) {
+    return this.request<any>('/email-campaigns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async sendEmailCampaign(id: string) {
+    return this.request<any>(`/email-campaigns/${id}/send`, {
+      method: 'POST',
+    });
+  }
+
+  async deleteEmailCampaign(id: string) {
+    return this.request<any>(`/email-campaigns/${id}`, { method: 'DELETE' });
+  }
+
+  // Admin Notifications
+  async getNotifications() {
+    return this.request<any[]>('/admin/notifications');
+  }
+
+  async markNotificationRead(id: string) {
+    return this.request<any>(`/admin/notifications/${id}/read`, { method: 'PUT' });
+  }
+
+  async deleteNotification(id: string) {
+    return this.request<any>(`/admin/notifications/${id}`, { method: 'DELETE' });
+  }
+
   // File Upload (Cloudinary)
   async uploadImage(file: File) {
     const formData = new FormData();

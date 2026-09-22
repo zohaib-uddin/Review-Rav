@@ -280,6 +280,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
           size,
           color: colorName,
           price: existingVariant?.price || sizePrice || (size === sizes[0] ? formData.base_price : null),
+          compare_at_price: existingVariant?.compare_at_price || formData.compare_at_price || null,
           stock: existingVariant?.stock || 0,
           sku: `${formData.sku || 'RVZ'}-${size}-${colorName.replace(/\s+/g, '-').toUpperCase()}`
         });
@@ -341,6 +342,13 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
   const updateVariant = (index: number, field: string, value: any) => {
     const newVariants = [...variants];
     newVariants[index] = { ...newVariants[index], [field]: value };
+    setVariants(newVariants);
+  };
+
+  // Add compare_at_price to variants
+  const updateVariantComparePrice = (index: number, value: number | null) => {
+    const newVariants = [...variants];
+    newVariants[index] = { ...newVariants[index], compare_at_price: value };
     setVariants(newVariants);
   };
 
@@ -980,6 +988,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                           <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Size</th>
                           <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Color</th>
                           <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Price (Rs.)</th>
+                          <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Compare Price</th>
                           <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">Stock</th>
                           <th className="text-left p-2.5 font-bold uppercase tracking-wider text-gray-600">SKU</th>
                         </tr>
@@ -995,6 +1004,15 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
                                 value={variant.price !== null && variant.price !== undefined ? variant.price : ''}
                                 onChange={(e) => updateVariant(index, 'price', e.target.value ? parseFloat(e.target.value) : null)}
                                 placeholder={`Rs. ${formData.base_price}`}
+                                className="w-24 px-2 py-1 border rounded text-xs font-medium"
+                              />
+                            </td>
+                            <td className="p-2.5">
+                              <input
+                                type="number"
+                                value={variant.compare_at_price !== null && variant.compare_at_price !== undefined ? variant.compare_at_price : ''}
+                                onChange={(e) => updateVariantComparePrice(index, e.target.value ? parseFloat(e.target.value) : null)}
+                                placeholder="Original"
                                 className="w-24 px-2 py-1 border rounded text-xs font-medium"
                               />
                             </td>

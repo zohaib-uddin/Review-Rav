@@ -18,12 +18,14 @@
     "@supabase/supabase-js": "^2.98.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/papaparse": "^5.5.2",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.3",
     "cors": "^2.8.6",
     "date-fns": "^2.30.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
+    "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "framer-motion": "^11.16.1",
     "i18next": "^26.4.2",
@@ -41,8 +43,7 @@
     "uuid": "^14.0.2",
     "xlsx": "^0.18.5",
     "zod": "^4.6.4",
-    "zustand": "^5.0.15",
-    "esbuild": "^0.28.2"
+    "zustand": "^5.0.15"
   },
   "engines": {
     "node": ">=20.0.0"

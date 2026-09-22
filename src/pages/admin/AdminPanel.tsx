@@ -97,9 +97,13 @@ export default function AdminPanel() {
   };
 
   const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
-  const lowStockProducts = products.filter(p => (p.stockCount !== undefined ? p.stockCount : 50) < 20);
+  const lowStockProducts = products.filter(p => {
+    const units = p.stockCount ?? (p as any).stock ?? 0;
+    const threshold = Number(p.low_stock_threshold ?? 4);
+    return units <= threshold;
+  });
 
-  // Sections with Product Add/Update merged into Inventory, and Import/FAQ/General removed
+  // Sections with Product Add/Update merged into Inventory, and Import/FAQ/General/Collections removed
   const sections = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'inventory', label: 'Products & Inventory', icon: Package, badge: `${products.length}` },
@@ -107,7 +111,8 @@ export default function AdminPanel() {
     { id: 'stock-alerts', label: 'Stock Alerts', icon: AlertTriangle, badge: lowStockProducts.length > 0 ? `${lowStockProducts.length}` : undefined },
     { id: 'orders', label: 'Orders', icon: ShoppingBag, badge: `${orders.length}` },
     { id: 'categories', label: 'Categories', icon: Box },
-    { id: 'collections', label: 'Collections', icon: Layers },
+    // Collections tab commented out per user request
+    // { id: 'collections', label: 'Collections', icon: Layers },
     { id: 'reviews', label: 'Reviews', icon: Star },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'newsletter', label: 'Newsletter', icon: Mail },
@@ -476,18 +481,37 @@ export default function AdminPanel() {
                 {/* Low Stock Alerts */}
                 {lowStockProducts.length > 0 && (
                   <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-5">
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-amber-900 mb-3 flex items-center gap-2">
-                      <AlertTriangle size={16} /> Urgent Stock Replenishment Required ({lowStockProducts.length})
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-xs uppercase tracking-wider text-amber-900 flex items-center gap-2">
+                        <AlertTriangle size={16} /> Urgent Stock Replenishment Required ({lowStockProducts.length})
+                      </h3>
+                      <button
+                        onClick={() => setActiveSection('stock-alerts')}
+                        className="text-xs font-semibold text-amber-900 hover:underline"
+                      >
+                        View All Alerts →
+                      </button>
+                    </div>
                     <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {lowStockProducts.slice(0, 6).map(p => (
-                        <div key={p.id} className="flex justify-between items-center text-xs bg-white p-3 rounded-xl border border-amber-200/80 shadow-2xs">
-                          <span className="font-semibold truncate mr-2">{p.name}</span>
-                          <span className="font-mono font-bold text-amber-700 shrink-0 bg-amber-100 px-2 py-0.5 rounded">
-                            {p.stockCount || 0} left
-                          </span>
-                        </div>
-                      ))}
+                      {lowStockProducts.slice(0, 6).map(p => {
+                        const units = p.stockCount ?? (p as any).stock ?? 0;
+                        const threshold = Number(p.low_stock_threshold ?? 4);
+                        const isOut = units === 0;
+
+                        return (
+                          <div key={p.id} className="flex justify-between items-center text-xs bg-white p-3 rounded-xl border border-amber-200/80 shadow-2xs">
+                            <div className="min-w-0 mr-2">
+                              <span className="font-semibold truncate block">{p.name}</span>
+                              <span className="text-[10px] text-gray-500">Threshold: {threshold}</span>
+                            </div>
+                            <span className={`font-mono font-bold shrink-0 px-2 py-0.5 rounded text-[11px] ${
+                              isOut ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {isOut ? 'OUT OF STOCK' : `${units} left`}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -575,7 +599,7 @@ export default function AdminPanel() {
             {activeSection === 'stock-alerts' && <StockAlerts />}
             {activeSection === 'orders' && <AdminOrders />}
             {activeSection === 'categories' && <AdminCategories />}
-            {activeSection === 'collections' && <AdminCollections />}
+            {/* {activeSection === 'collections' && <AdminCollections />} */}
             {activeSection === 'reviews' && <AdminReviews />}
             {activeSection === 'journal' && <AdminJournal />}
             {activeSection === 'newsletter' && <AdminNewsletter />}

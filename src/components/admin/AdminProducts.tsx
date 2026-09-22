@@ -106,7 +106,11 @@ export default function AdminProducts({ onEditProduct, onAddProduct }: AdminProd
     } else if (selectedFilter === 'featured') {
       result = result.filter(p => p.is_featured || p.isFeatured);
     } else if (selectedFilter === 'low_stock') {
-      result = result.filter(p => (p.stockCount || 50) < 15);
+      result = result.filter(p => {
+        const stock = p.stockCount ?? (p as any).stock ?? 0;
+        const thresh = Number(p.low_stock_threshold ?? 4);
+        return stock <= thresh;
+      });
     } else if (selectedFilter === 'drafts') {
       result = result.filter(p => p.is_draft || p.status === 'draft');
     }
@@ -137,7 +141,11 @@ export default function AdminProducts({ onEditProduct, onAddProduct }: AdminProd
     const bestsellers = products.filter(p => p.is_best_seller || p.isBestseller || (p as any).is_bestseller).length;
     const newArrivals = products.filter(p => p.is_new_arrival || p.isNew).length;
     const featured = products.filter(p => p.is_featured || p.isFeatured).length;
-    const lowStock = products.filter(p => (p.stockCount || 50) < 15).length;
+    const lowStock = products.filter(p => {
+      const stock = p.stockCount ?? (p as any).stock ?? 0;
+      const thresh = Number(p.low_stock_threshold ?? 4);
+      return stock <= thresh;
+    }).length;
     return { total, bestsellers, newArrivals, featured, lowStock };
   }, [products]);
 
@@ -426,16 +434,40 @@ export default function AdminProducts({ onEditProduct, onAddProduct }: AdminProd
 
                       {/* Inventory */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              stock > 20 ? 'bg-green-500' : stock > 0 ? 'bg-amber-500' : 'bg-red-500'
-                            }`}
-                          />
-                          <span className="text-xs font-semibold text-gray-700">
-                            {stock} units
-                          </span>
-                        </div>
+                        {(() => {
+                          const units = product.stockCount ?? (product as any).stock ?? 0;
+                          const threshold = Number(product.low_stock_threshold ?? 4);
+                          const isOut = units === 0;
+                          const isLow = units <= threshold && !isOut;
+
+                          return (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-2 h-2 rounded-full ${
+                                    isOut ? 'bg-red-500' : isLow ? 'bg-amber-500 animate-pulse' : 'bg-green-500'
+                                  }`}
+                                />
+                                <span className={`text-xs font-bold ${isOut ? 'text-red-700' : isLow ? 'text-amber-800' : 'text-gray-800'}`}>
+                                  {units} units
+                                </span>
+                              </div>
+                              {isOut ? (
+                                <span className="inline-block text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                  Out of Stock
+                                </span>
+                              ) : isLow ? (
+                                <span className="inline-block text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                                  Low Stock (Alert: ≤{threshold})
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">
+                                  Threshold: {threshold}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Action Buttons */}

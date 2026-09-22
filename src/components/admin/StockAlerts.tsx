@@ -25,17 +25,32 @@ export default function StockAlerts() {
   }, [fetchProducts]);
 
   useEffect(() => {
-    // Generate dynamic alerts from real products (threshold: 5)
+    // Generate dynamic alerts from real products based on each product's low_stock_threshold
     const generated: StockAlert[] = [];
     products.forEach((p) => {
-      const stock = (p as any).stockCount ?? p.stock ?? 50;
-      if (stock <= 5) {
+      const threshold = Number(p.low_stock_threshold ?? 4);
+
+      let stock = 0;
+      const matrix = Array.isArray(p.variants_matrix) 
+        ? p.variants_matrix 
+        : (typeof p.variants_matrix === 'string' ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })() : []);
+      if (matrix && matrix.length > 0) {
+        stock = matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+      } else if (typeof (p as any).stockCount === 'number') {
+        stock = (p as any).stockCount;
+      } else if (typeof p.stock === 'number') {
+        stock = p.stock;
+      } else {
+        stock = 0;
+      }
+
+      if (stock <= threshold) {
         generated.push({
           id: `alert-${p.id}`,
           productId: p.id,
           productName: p.name,
           currentStock: stock,
-          reorderPoint: 5,
+          reorderPoint: threshold,
           type: stock === 0 ? 'out' : 'low',
           createdAt: p.created_at || new Date().toISOString(),
           notified: Boolean(notifiedIds[`alert-${p.id}`]),

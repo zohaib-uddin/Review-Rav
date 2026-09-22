@@ -309,6 +309,7 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
     const basePrice = parseFloat(product.base_price || product.price || 0);
     const compareAtPrice = product.compare_at_price || product.salePrice ? parseFloat(product.compare_at_price || product.salePrice) : null;
     const categoryId = (product.category_id && String(product.category_id).length > 10) ? product.category_id : null;
+    const subcategoryId = (product.subcategory_id && String(product.subcategory_id).length > 10) ? product.subcategory_id : null;
     const fabric = product.fabric || null;
     const fit = product.fit || null;
     const sku = product.sku || `RVZ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -329,25 +330,43 @@ app.post('/api/products', authenticateToken, adminOnly, async (req, res) => {
     });
 
     const fabricComposition = product.fabric_composition || null;
+    const fabricFinish = product.fabric_finish || null;
+    const garmentCare = product.garment_care || null;
+    const shippingDelivery = product.shipping_delivery || null;
+    const modelSize = product.model_size || null;
+    const metaTitle = product.meta_title || null;
+    const metaDescription = product.meta_description || null;
+    const metaKeywords = product.meta_keywords || product.focus_keywords || null;
+    const canonicalUrl = product.canonical_url || null;
     const graphicPrint = product.graphic_print || null;
     const garmentSpecs = product.garment_specs || null;
     const status = product.status || 'active';
     const isActive = product.is_active !== false && !product.is_draft;
+    
+    // Variants matrix and size guide
+    const variantsMatrixJson = product.variants_matrix ? JSON.stringify(product.variants_matrix) : '[]';
+    const sizeGuideJson = product.size_guide ? JSON.stringify(product.size_guide) : null;
+    const costPrice = product.cost_price ? parseFloat(product.cost_price) : null;
 
     const result = await sql`
       INSERT INTO products (
-        name, slug, description, base_price, compare_at_price, category_id,
-        fabric, fit, sku, is_new_arrival, is_best_seller, is_featured,
+        name, slug, description, base_price, compare_at_price, cost_price, category_id, subcategory_id,
+        fabric, fabric_finish, fit, sku, is_new_arrival, is_best_seller, is_featured,
         badge, images, image_url, attributes, fabric_composition, graphic_print,
-        garment_specs, status, is_active
+        garment_specs, garment_care, shipping_delivery, model_size,
+        meta_title, meta_description, meta_keywords, canonical_url,
+        status, is_active, variants_matrix, size_guide
       ) VALUES (
         ${name}, ${slug}, ${description}, ${basePrice},
-        ${compareAtPrice}, ${categoryId}, ${fabric}, ${fit},
+        ${compareAtPrice}, ${costPrice}, ${categoryId}, ${subcategoryId},
+        ${fabric}, ${fabricFinish}, ${fit},
         ${sku}, ${isNewArrival}, ${isBestSeller},
         ${isFeatured}, ${badge},
         ${imagesJson}, ${imageUrl},
         ${attributesJson}, ${fabricComposition},
-        ${graphicPrint}, ${garmentSpecs}, ${status}, ${isActive}
+        ${graphicPrint}, ${garmentSpecs}, ${garmentCare}, ${shippingDelivery}, ${modelSize},
+        ${metaTitle}, ${metaDescription}, ${metaKeywords}, ${canonicalUrl},
+        ${status}, ${isActive}, ${variantsMatrixJson}, ${sizeGuideJson}
       )
       RETURNING *
     `;
@@ -405,6 +424,7 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
     const basePrice = product.base_price !== undefined ? parseFloat(product.base_price) : (product.price !== undefined ? parseFloat(product.price) : undefined);
     const compareAtPrice = product.compare_at_price !== undefined ? (product.compare_at_price ? parseFloat(product.compare_at_price) : null) : (product.salePrice !== undefined ? (product.salePrice ? parseFloat(product.salePrice) : null) : undefined);
     const categoryId = (product.category_id && String(product.category_id).length > 10) ? product.category_id : null;
+    const subcategoryId = (product.subcategory_id && String(product.subcategory_id).length > 10) ? product.subcategory_id : null;
     const fabric = product.fabric;
     const fit = product.fit;
     const sku = product.sku;
@@ -419,10 +439,23 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
 
     const attributesJson = product.attributes ? JSON.stringify(product.attributes) : undefined;
     const fabricComposition = product.fabric_composition;
+    const fabricFinish = product.fabric_finish;
+    const garmentCare = product.garment_care;
+    const shippingDelivery = product.shipping_delivery;
+    const modelSize = product.model_size;
+    const metaTitle = product.meta_title;
+    const metaDescription = product.meta_description;
+    const metaKeywords = product.meta_keywords || product.focus_keywords;
+    const canonicalUrl = product.canonical_url;
     const graphicPrint = product.graphic_print;
     const garmentSpecs = product.garment_specs;
     const status = product.status;
     const isActive = product.is_active !== undefined ? product.is_active : (product.is_draft !== undefined ? !product.is_draft : undefined);
+    
+    // Variants matrix and size guide
+    const variantsMatrixJson = product.variants_matrix ? JSON.stringify(product.variants_matrix) : undefined;
+    const sizeGuideJson = product.size_guide ? JSON.stringify(product.size_guide) : undefined;
+    const costPrice = product.cost_price !== undefined ? (product.cost_price ? parseFloat(product.cost_price) : null) : undefined;
 
     const result = await sql`
       UPDATE products SET
@@ -432,7 +465,9 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
         base_price = COALESCE(${basePrice}, base_price),
         compare_at_price = ${compareAtPrice},
         category_id = COALESCE(${categoryId}, category_id),
+        subcategory_id = COALESCE(${subcategoryId}, subcategory_id),
         fabric = COALESCE(${fabric}, fabric),
+        fabric_finish = COALESCE(${fabricFinish}, fabric_finish),
         fit = COALESCE(${fit}, fit),
         sku = COALESCE(${sku}, sku),
         is_new_arrival = COALESCE(${isNewArrival}, is_new_arrival),
@@ -443,10 +478,20 @@ app.put('/api/products/:id', authenticateToken, adminOnly, async (req, res) => {
         image_url = COALESCE(${imageUrl}, image_url),
         attributes = COALESCE(${attributesJson}::jsonb, attributes),
         fabric_composition = COALESCE(${fabricComposition}, fabric_composition),
+        garment_care = COALESCE(${garmentCare}, garment_care),
+        shipping_delivery = COALESCE(${shippingDelivery}, shipping_delivery),
+        model_size = COALESCE(${modelSize}, model_size),
+        meta_title = COALESCE(${metaTitle}, meta_title),
+        meta_description = COALESCE(${metaDescription}, meta_description),
+        meta_keywords = COALESCE(${metaKeywords}, meta_keywords),
+        canonical_url = COALESCE(${canonicalUrl}, canonical_url),
         graphic_print = COALESCE(${graphicPrint}, graphic_print),
         garment_specs = COALESCE(${garmentSpecs}, garment_specs),
         status = COALESCE(${status}, status),
         is_active = COALESCE(${isActive}, is_active),
+        variants_matrix = COALESCE(${variantsMatrixJson}::jsonb, variants_matrix),
+        size_guide = COALESCE(${sizeGuideJson}::jsonb, size_guide),
+        cost_price = ${costPrice},
         updated_at = NOW()
       WHERE id::text = ${id} OR slug = ${id}
       RETURNING *
@@ -514,6 +559,48 @@ app.delete('/api/products/:id', authenticateToken, adminOnly, async (req, res) =
 
 // ==================== CATEGORIES ROUTES ====================
 
+// Create category (Admin only)
+app.post('/api/categories', authenticateToken, adminOnly, async (req, res) => {
+  try {
+    const { name, slug, description, badge, tag, cover_image_url, parent_id, sort_order, is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter } = req.body;
+    
+    // Validate max 4 featured categories
+    if (is_featured_in_focus === true) {
+      const featuredCount = await sql`
+        SELECT COUNT(*) as count FROM categories 
+        WHERE is_featured_in_focus = true
+      `;
+      
+      if (parseInt(featuredCount[0].count) >= 4) {
+        return res.status(400).json({ 
+          message: 'Maximum 4 categories can be featured in Collections in Focus' 
+        });
+      }
+    }
+    
+    const finalSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat-${Date.now()}`;
+    
+    const result = await sql`
+      INSERT INTO categories (
+        name, slug, description, badge, tag, cover_image_url, parent_id, sort_order,
+        is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter, is_active
+      ) VALUES (
+        ${name}, ${finalSlug}, ${description || null}, ${badge || null}, ${tag || null},
+        ${cover_image_url || null}, ${parent_id || null}, ${sort_order || 0},
+        ${is_featured_in_focus || false}, ${display_order_in_focus || 0},
+        ${is_warm_chapter || false}, ${display_order_warm_chapter || 0}, true
+      )
+      RETURNING *
+    `;
+    
+    console.log(`✅ Category created: ${result[0].name}`);
+    res.json(result[0]);
+  } catch (error: any) {
+    console.error('❌ Create category error:', error);
+    res.status(500).json({ message: 'Server error creating category', error: error.message });
+  }
+});
+
 app.get('/api/categories', async (req, res) => {
   try {
     console.log('📂 Fetching categories from database...');
@@ -521,7 +608,7 @@ app.get('/api/categories', async (req, res) => {
     const categories = await sql`
       SELECT * FROM categories 
       WHERE is_active = true 
-      ORDER BY sort_order ASC
+      ORDER BY sort_order ASC, parent_id ASC
     `;
     
     console.log(`✅ Found ${categories.length} categories`);
@@ -616,7 +703,7 @@ app.get('/api/warm-chapters', async (req, res) => {
 app.put('/api/categories/:id', authenticateToken, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const { is_featured_in_focus, display_order_in_focus, ...otherFields } = req.body;
+    const { is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter, ...otherFields } = req.body;
     
     // Validate max 4 featured categories if enabling is_featured_in_focus
     if (is_featured_in_focus === true) {
@@ -640,14 +727,19 @@ app.put('/api/categories/:id', authenticateToken, adminOnly, async (req, res) =>
         cover_image_url = COALESCE(${otherFields.cover_image_url || otherFields.image_url}, cover_image_url),
         badge = COALESCE(${otherFields.badge}, badge),
         tag = COALESCE(${otherFields.tag}, tag),
+        parent_id = COALESCE(${otherFields.parent_id}, parent_id),
+        sort_order = COALESCE(${otherFields.sort_order}, sort_order),
         is_active = COALESCE(${otherFields.is_active}, is_active),
         is_featured_in_focus = COALESCE(${is_featured_in_focus}, is_featured_in_focus),
         display_order_in_focus = COALESCE(${display_order_in_focus}, display_order_in_focus),
+        is_warm_chapter = COALESCE(${is_warm_chapter}, is_warm_chapter),
+        display_order_warm_chapter = COALESCE(${display_order_warm_chapter}, display_order_warm_chapter),
         updated_at = NOW()
       WHERE id = ${id}
       RETURNING *
     `;
     
+    console.log(`✅ Category updated: ${updated[0]?.name}`);
     res.json(updated[0]);
   } catch (error: any) {
     console.error('❌ Update category error:', error);
@@ -1087,6 +1179,545 @@ async function initDatabaseSchema() {
     } catch (_) {}
 
     console.log('✅ Neon DB database schema checked and aligned!');
+  } catch (err: any) {
+    console.warn('⚠️ Database schema alignment notice:', err.message);
+  }
+}
+
+// ==================== NOTIFICATIONS API ====================
+app.get('/api/notifications', authenticateToken, async (req: any, res) => {
+  try {
+    let notifications;
+    if (req.user.role === 'admin') {
+      // Admin sees all notifications
+      notifications = await sql`
+        SELECT * FROM notifications
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+    } else {
+      // Users see only their own notifications
+      notifications = await sql`
+        SELECT * FROM notifications
+        WHERE user_id = ${req.user.id} OR user_id IS NULL
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+    }
+    res.json(notifications);
+  } catch (error: any) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ message: 'Failed to fetch notifications' });
+  }
+});
+
+app.patch('/api/notifications/:id/read', authenticateToken, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    if (id === 'all') {
+      if (req.user.role === 'admin') {
+        await sql`UPDATE notifications SET is_read = true`;
+      } else {
+        await sql`UPDATE notifications SET is_read = true WHERE user_id = ${req.user.id}`;
+      }
+    } else {
+      if (req.user.role === 'admin') {
+        await sql`UPDATE notifications SET is_read = true WHERE id = ${id}`;
+      } else {
+        await sql`UPDATE notifications SET is_read = true WHERE id = ${id} AND user_id = ${req.user.id}`;
+      }
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Mark notification read error:', error);
+    res.status(500).json({ message: 'Failed to update notification' });
+  }
+});
+
+// Helper function to create notification
+async function createNotification(userId: string | null, title: string, message: string, type: string, link?: string) {
+  try {
+    await sql`
+      INSERT INTO notifications (user_id, title, message, type, link)
+      VALUES (${userId}, ${title}, ${message}, ${type}, ${link || null})
+    `;
+  } catch (error: any) {
+    console.error('Create notification error:', error);
+  }
+}
+
+// ==================== ANALYTICS API (Dynamic - Delivered Orders Only) ====================
+app.get('/api/admin/analytics', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const { dateRange = '30days' } = req.query;
+
+    // Calculate date range
+    let days = 30;
+    if (dateRange === '7days') days = 7;
+    if (dateRange === '90days') days = 90;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Get only DELIVERED orders for revenue calculation
+    const deliveredOrders = await sql`
+      SELECT * FROM orders
+      WHERE status = 'delivered'
+      AND created_at >= ${startDate.toISOString()}
+      ORDER BY created_at
+    `;
+
+    // Total Revenue (only delivered)
+    const totalRevenue = deliveredOrders.reduce((sum: number, order: any) => sum + parseFloat(order.total || 0), 0);
+
+    // Total Orders (only delivered)
+    const totalOrders = deliveredOrders.length;
+
+    // Total Customers (registered users + active newsletter subscribers)
+    const registeredUsers = await sql`SELECT COUNT(*) as count FROM users WHERE role = 'customer' AND is_active = true`;
+    const activeSubscribers = await sql`SELECT COUNT(*) as count FROM newsletter_subscribers WHERE is_active = true`;
+    const totalCustomers = parseInt(registeredUsers[0]?.count || 0) + parseInt(activeSubscribers[0]?.count || 0);
+
+    // Average Order Value
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+    // Revenue Over Time (daily)
+    const revenueByDay: Record<string, number> = {};
+    deliveredOrders.forEach((order: any) => {
+      const date = new Date(order.created_at).toISOString().split('T')[0];
+      revenueByDay[date] = (revenueByDay[date] || 0) + parseFloat(order.total || 0);
+    });
+
+    const revenueData = Object.entries(revenueByDay).map(([date, revenue]) => ({
+      date,
+      revenue
+    }));
+
+    // Orders Over Time (daily)
+    const ordersByDay: Record<string, number> = {};
+    deliveredOrders.forEach((order: any) => {
+      const date = new Date(order.created_at).toISOString().split('T')[0];
+      ordersByDay[date] = (ordersByDay[date] || 0) + 1;
+    });
+
+    const ordersData = Object.entries(ordersByDay).map(([date, orders]) => ({
+      date,
+      orders
+    }));
+
+    // Sales by Category (from delivered orders)
+    const categorySales: Record<string, number> = {};
+    for (const order of deliveredOrders) {
+      const items = JSON.parse(order.items || '[]');
+      for (const item of items) {
+        const category = item.category || 'Uncategorized';
+        categorySales[category] = (categorySales[category] || 0) + (item.quantity || 1);
+      }
+    }
+
+    const categoryData = Object.entries(categorySales)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    // Sales by Product (from delivered orders)
+    const productSales: Record<string, { sales: number; revenue: number }> = {};
+    for (const order of deliveredOrders) {
+      const items = JSON.parse(order.items || '[]');
+      for (const item of items) {
+        const productName = item.name || 'Unknown Product';
+        if (!productSales[productName]) {
+          productSales[productName] = { sales: 0, revenue: 0 };
+        }
+        productSales[productName].sales += (item.quantity || 1);
+        productSales[productName].revenue += (item.quantity || 1) * (parseFloat(item.price || 0));
+      }
+    }
+
+    const topProducts = Object.entries(productSales)
+      .map(([name, data]: [string, any]) => ({
+        name,
+        sales: data.sales,
+        revenue: data.revenue
+      }))
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 10);
+
+    res.json({
+      revenue: totalRevenue,
+      orders: totalOrders,
+      customers: totalCustomers,
+      avgOrderValue,
+      revenueData,
+      ordersData,
+      categoryData,
+      topProducts
+    });
+  } catch (error: any) {
+    console.error('Analytics API error:', error);
+    res.status(500).json({ message: 'Failed to fetch analytics' });
+  }
+});
+
+// ==================== STOCK ALERTS API (Dynamic based on threshold) ====================
+app.get('/api/admin/stock-alerts', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const products = await sql`SELECT * FROM products WHERE is_active = true`;
+
+    const alerts = products
+      .filter((p: any) => {
+        const stock = p.stock_count ?? 50;
+        const threshold = p.low_stock_threshold ?? 4;
+        return stock <= threshold;
+      })
+      .map((p: any) => ({
+        id: `alert-${p.id}`,
+        productId: p.id,
+        productName: p.name,
+        currentStock: p.stock_count ?? 50,
+        reorderPoint: p.low_stock_threshold ?? 4,
+        type: (p.stock_count ?? 50) === 0 ? 'out' : 'low',
+        createdAt: p.created_at,
+        notified: false
+      }));
+
+    res.json(alerts);
+  } catch (error: any) {
+    console.error('Stock alerts error:', error);
+    res.status(500).json({ message: 'Failed to fetch stock alerts' });
+  }
+});
+
+// ==================== EMAIL MARKETING API ====================
+app.post('/api/admin/email-campaigns', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const { subject, content, target_audience } = req.body;
+
+    const campaign = await sql`
+      INSERT INTO email_campaigns (subject, content, target_audience, created_by, status)
+      VALUES (${subject}, ${content}, ${target_audience}, ${req.user.id}, 'sending')
+      RETURNING *
+    `;
+
+    // Get recipients based on target audience
+    let recipients: any[] = [];
+
+    if (target_audience === 'all' || target_audience === 'active_customers') {
+      const customers = await sql`SELECT email FROM users WHERE role = 'customer' AND is_active = true`;
+      recipients.push(...customers);
+    }
+
+    if (target_audience === 'all' || target_audience === 'subscribers') {
+      const subscribers = await sql`SELECT email FROM newsletter_subscribers WHERE is_active = true`;
+      recipients.push(...subscribers);
+    }
+
+    if (target_audience === 'inactive_customers') {
+      const inactive = await sql`SELECT email FROM users WHERE role = 'customer' AND is_active = false`;
+      recipients.push(...inactive);
+    }
+
+    // Remove duplicates
+    const uniqueEmails = [...new Set(recipients.map(r => r.email))];
+
+    // Store recipients
+    for (const email of uniqueEmails) {
+      await sql`
+        INSERT INTO email_campaign_recipients (campaign_id, email)
+        VALUES (${campaign[0].id}, ${email})
+      `;
+    }
+
+    // Update campaign with sent count
+    await sql`
+      UPDATE email_campaigns
+      SET sent_count = ${uniqueEmails.length}, status = 'completed', sent_at = NOW()
+      WHERE id = ${campaign[0].id}
+    `;
+
+    // TODO: Trigger Google Apps Script to send emails via webhook
+    // This will be done via external API call to deployed Apps Script
+
+    res.json({ success: true, campaign: campaign[0], recipientCount: uniqueEmails.length });
+  } catch (error: any) {
+    console.error('Create campaign error:', error);
+    res.status(500).json({ message: 'Failed to create campaign' });
+  }
+});
+
+app.get('/api/admin/email-campaigns', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const campaigns = await sql`
+      SELECT * FROM email_campaigns
+      ORDER BY created_at DESC
+    `;
+    res.json(campaigns);
+  } catch (error: any) {
+    console.error('Get campaigns error:', error);
+    res.status(500).json({ message: 'Failed to fetch campaigns' });
+  }
+});
+
+// ==================== REVIEWS API with Approval/Rejection ====================
+app.patch('/api/reviews/:id/approve', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    await sql`UPDATE reviews SET is_approved = true WHERE id = ${id}`;
+
+    // Create notification for user
+    const review = await sql`SELECT user_id FROM reviews WHERE id = ${id}`;
+    if (review[0]) {
+      await createNotification(
+        review[0].user_id,
+        'Review Approved',
+        'Your product review has been approved and is now visible.',
+        'order',
+        '/account/reviews'
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Approve review error:', error);
+    res.status(500).json({ message: 'Failed to approve review' });
+  }
+});
+
+app.patch('/api/reviews/:id/reject', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    await sql`UPDATE reviews SET is_approved = false WHERE id = ${id}`;
+
+    // Create notification for user
+    const review = await sql`SELECT user_id FROM reviews WHERE id = ${id}`;
+    if (review[0]) {
+      await createNotification(
+        review[0].user_id,
+        'Review Not Approved',
+        'Your product review was not approved. Please check our guidelines.',
+        'order',
+        '/account/reviews'
+      );
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Reject review error:', error);
+    res.status(500).json({ message: 'Failed to reject review' });
+  }
+});
+
+// ==================== ORDER DETAIL API ====================
+app.get('/api/orders/:id/detail', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const orders = await sql`SELECT * FROM orders WHERE id = ${id}`;
+
+    if (orders.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    // Get user details if exists
+    let user = null;
+    if (order.user_id) {
+      const users = await sql`SELECT * FROM users WHERE id = ${order.user_id}`;
+      user = users[0];
+    }
+
+    res.json({
+      ...order,
+      user,
+      items: JSON.parse(order.items || '[]')
+    });
+  } catch (error: any) {
+    console.error('Get order detail error:', error);
+    res.status(500).json({ message: 'Failed to fetch order details' });
+  }
+});
+
+app.patch('/api/orders/:id/status', authenticateToken, adminOnly, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { status, payment_status } = req.body;
+
+    const updates: any = {};
+    if (status) updates.status = status;
+    if (payment_status) updates.payment_status = payment_status;
+
+    // Build dynamic SQL
+    let updateQuery = sql`UPDATE orders SET updated_at = NOW()`;
+
+    if (updates.status) {
+      updateQuery = sql`${updateQuery}, status = ${updates.status}`;
+    }
+    if (updates.payment_status) {
+      updateQuery = sql`${updateQuery}, payment_status = ${updates.payment_status}`;
+    }
+
+    await sql`${updateQuery} WHERE id = ${id}`;
+
+    // Create notification for user about order status change
+    if (status === 'delivered') {
+      const order = await sql`SELECT user_id FROM orders WHERE id = ${id}`;
+      if (order[0]) {
+        await createNotification(
+          order[0].user_id,
+          'Order Delivered!',
+          'Your order has been successfully delivered. Thank you for shopping with us!',
+          'order',
+          '/account/orders'
+        );
+      }
+    }
+
+    // Log audit
+    await sql`
+      INSERT INTO audit_logs (entity_type, entity_id, action, performed_by, changes)
+      VALUES ('order', ${id}, 'status_update', ${req.user.email}, ${JSON.stringify(updates)})
+    `;
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Update order status error:', error);
+    res.status(500).json({ message: 'Failed to update order status' });
+  }
+});
+
+// ==================== AUDIT LOG with Frontend Events ====================
+app.post('/api/audit-log', async (req, res) => {
+  try {
+    const { entity_type, entity_id, action, user_email, changes, ip_address, user_agent } = req.body;
+
+    await sql`
+      INSERT INTO audit_logs (entity_type, entity_id, action, performed_by, changes, ip_address, user_agent)
+      VALUES (
+        ${entity_type},
+        ${entity_id || null},
+        ${action},
+        ${user_email || 'anonymous'},
+        ${JSON.stringify(changes || {})},
+        ${ip_address || null},
+        ${user_agent || null}
+      )
+    `;
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Create audit log error:', error);
+    res.status(500).json({ message: 'Failed to create audit log' });
+  }
+});
+
+// Enhanced login endpoint with audit log and notification
+const originalLoginHandler = app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const users = await sql`SELECT * FROM users WHERE email = ${email} AND is_active = true`;
+    
+    if (users.length === 0) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const user = users[0];
+    
+    if (user.password !== password) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    await sql`UPDATE users SET last_login = NOW() WHERE id = ${user.id}`;
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Create audit log for login
+    await sql`
+      INSERT INTO audit_logs (entity_type, entity_id, action, performed_by, ip_address, user_agent)
+      VALUES ('login', ${user.id}, 'user_login', ${email}, ${req.ip}, ${req.get('user-agent') || null})
+    `;
+
+    // Create notification for admin about new login (if not admin)
+    if (user.role !== 'admin') {
+      await createNotification(
+        null,
+        'New User Login',
+        `${email} logged in successfully`,
+        'info'
+      );
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        is_verified: user.is_verified,
+      },
+      token,
+    });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Track order placement with audit log and notification
+const originalOrderPostHandler = app.post('/api/orders', authenticateToken, async (req: any, res) => {
+  try {
+    const { cartItems, shippingAddress, billingAddress, paymentMethod, notes, discountCode, shippingMethod } = req.body;
+
+    if (!cartItems || cartItems.length === 0) {
+      return res.status(400).json({ message: 'Cart is empty' });
+    }
+
+    const orderNumber = `RVZ-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const subtotal = cartItems.reduce((sum: number, item: any) => sum + (parseFloat(item.price) * item.quantity), 0);
+    const shippingCost = shippingMethod?.price || 0;
+    const discountAmount = 0; // Will be calculated if discount code is valid
+    const total = subtotal + shippingCost - discountAmount;
+
+    const order = await sql`
+      INSERT INTO orders (
+        order_number, user_id, status, payment_status, payment_method,
+        subtotal, shipping_cost, total, discount_amount, discount_code,
+        shipping_address, billing_address, order_notes, shipping_method, items
+      )
+      VALUES (
+        ${orderNumber}, ${req.user.id}, 'pending', 'unpaid', ${paymentMethod || 'cod'},
+        ${subtotal}, ${shippingCost}, ${total}, ${discountAmount}, ${discountCode || null},
+        ${JSON.stringify(shippingAddress)}, ${billingAddress ? JSON.stringify(billingAddress) : null},
+        ${notes || null}, ${shippingMethod ? JSON.stringify(shippingMethod) : null}, ${JSON.stringify(cartItems)}
+      )
+      RETURNING *
+    `;
+
+    // Create audit log for order placement
+    await sql`
+      INSERT INTO audit_logs (entity_type, entity_id, action, performed_by, changes)
+      VALUES ('order', ${order[0].id}, 'order_placed', ${req.user.email}, ${JSON.stringify(req.body)})
+    `;
+
+    // Create notification for admin about new order
+    await createNotification(
+      null,
+      'New Order Placed',
+      `Order #${orderNumber} placed by ${req.user.email}`,
+      'order',
+      '/admin/orders'
+    );
+
+    res.json({ success: true, order: order[0] });
+  } catch (error: any) {
+    console.error('Create order error:', error);
+    res.status(500).json({ message: 'Failed to create order', error: error.message });
+  }
+});
+
+console.log('✅ Neon DB database schema checked and aligned!');
   } catch (err: any) {
     console.warn('⚠️ Database schema alignment notice:', err.message);
   }

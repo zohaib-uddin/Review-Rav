@@ -73,6 +73,7 @@ export interface Product {
   sizes?: string[];
   colors?: string[];
   stockCount?: number;
+  low_stock_threshold?: number;
   inStock?: boolean;
   isNew?: boolean;
   isFeatured?: boolean;
@@ -214,15 +215,18 @@ export const useStore = create<StoreState>((set, get) => ({
       const result = await api.login(email, password);
       api.setToken(result.token);
       set({ user: result.user, apiAvailable: true });
+      api.logAudit('User Login', result.user?.name || email, result.user?.name || email, `Logged in with role: ${result.user?.role}`);
       return true;
     } catch {
       // Fallback to demo mode
       if (email === 'admin@ravenza.pk' && password === 'admin123') {
         set({ user: { id: 'admin', email, name: 'Admin', role: 'admin', is_verified: true }, apiAvailable: false });
+        api.logAudit('User Login', 'Admin', 'admin@ravenza.pk', 'Admin dashboard sign-in');
         return true;
       }
       if (email && password.length >= 6) {
         set({ user: { id: Date.now().toString(), email, name: email.split('@')[0], role: 'customer', is_verified: true }, apiAvailable: false });
+        api.logAudit('User Login', email, email, 'Customer storefront sign-in');
         return true;
       }
       return false;
@@ -234,10 +238,12 @@ export const useStore = create<StoreState>((set, get) => ({
       const result = await api.register(email, name, password);
       api.setToken(result.token);
       set({ user: result.user, apiAvailable: true });
+      api.logAudit('User Registered', name, email, 'New customer account created');
       return true;
     } catch {
       if (email && name && password.length >= 6) {
         set({ user: { id: Date.now().toString(), email, name, role: 'customer', is_verified: false }, apiAvailable: false });
+        api.logAudit('User Registered', name, email, 'New customer account created');
         return true;
       }
       return false;
@@ -260,6 +266,8 @@ export const useStore = create<StoreState>((set, get) => ({
     } else {
       set({ cart: [...cart, { product, quantity: 1, size, color }] });
     }
+    // Audit log item added to cart
+    api.logAudit('Item Added to Cart', product.name, get().user?.name || get().user?.email || 'Storefront Visitor', `Size: ${size}, Color: ${color}`);
   },
 
   removeFromCart: (productId, size) => {
@@ -276,11 +284,15 @@ export const useStore = create<StoreState>((set, get) => ({
   clearCart: () => set({ cart: [] }),
 
   toggleWishlist: (productId) => {
-    const { wishlist } = get();
+    const { wishlist, products, user } = get();
+    const targetProd = products.find(p => p.id === productId);
+    const prodName = targetProd?.name || productId;
     if (wishlist.includes(productId)) {
       set({ wishlist: wishlist.filter(id => id !== productId) });
+      api.logAudit('Wishlist Item Removed', prodName, user?.name || user?.email || 'Storefront Visitor');
     } else {
       set({ wishlist: [...wishlist, productId] });
+      api.logAudit('Wishlist Item Added', prodName, user?.name || user?.email || 'Storefront Visitor');
     }
   },
 

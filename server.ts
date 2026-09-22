@@ -957,9 +957,44 @@ let ordersStore = [...initialOrders];
 let faqsStore = [...initialFaqs];
 let journalStore = [...initialJournal];
 let couponsStore = [...initialCoupons];
-let newsletterStore: { email: string; date: string }[] = [
-  { email: 'ahmed.khan@gmail.com', date: '2024-01-20' },
-  { email: 'sara.ali@gmail.com', date: '2024-02-14' },
+let newsletterStore: { id: string; email: string; date: string; is_active: boolean }[] = [
+  { id: 'sub-1', email: 'ahmed.khan@gmail.com', date: '2024-01-20', is_active: true },
+  { id: 'sub-2', email: 'sara.ali@gmail.com', date: '2024-02-14', is_active: true },
+];
+
+let emailCampaignsStore: {
+  id: string;
+  name: string;
+  subject: string;
+  content: string;
+  target_audience: string;
+  status: 'draft' | 'scheduled' | 'sent';
+  recipients: number;
+  sent_at?: string;
+  scheduled_at?: string;
+  created_at: string;
+}[] = [
+  {
+    id: 'camp-1',
+    name: 'Winter Drop Announcement',
+    subject: 'New Winter Collection is Here! 🎉',
+    content: 'Check out our newly dropped heavyweight hoodies and thermal streetwear sets.',
+    target_audience: 'all',
+    status: 'sent',
+    recipients: 1250,
+    sent_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+    created_at: new Date(Date.now() - 6 * 86400000).toISOString(),
+  },
+  {
+    id: 'camp-2',
+    name: 'VIP Flash Sale',
+    subject: 'Flash Sale: 20% Off Everything! ⚡',
+    content: 'Exclusive 24-hour flash sale for our subscribers. Use code RAVENZA20 at checkout.',
+    target_audience: 'subscribers',
+    status: 'draft',
+    recipients: 0,
+    created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+  }
 ];
 let wishlistStore: { user_id: string; product_id: string }[] = [];
 let otpStore: { [email: string]: { otp: string; expiresAt: number } } = {};
@@ -1057,8 +1092,28 @@ function formatProduct(p: any, catMap: Map<string, any>) {
     category: category?.slug || p.category_slug || p.category || 'uncategorized',
     sizes: p.attributes?.sizes || ['S', 'M', 'L', 'XL'],
     colors: p.attributes?.colors || ['Black'],
-    stockCount: p.stock ?? 50,
-    inStock: p.is_in_stock ?? true,
+    stockCount: (() => {
+      const matrix = Array.isArray(p.variants_matrix) 
+        ? p.variants_matrix 
+        : (typeof p.variants_matrix === 'string' ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })() : []);
+      if (matrix && matrix.length > 0) {
+        return matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+      }
+      if (typeof p.stockCount === 'number') return p.stockCount;
+      if (typeof p.stock === 'number') return p.stock;
+      return 50;
+    })(),
+    low_stock_threshold: Number(p.low_stock_threshold ?? 4),
+    inStock: (() => {
+      const matrix = Array.isArray(p.variants_matrix) 
+        ? p.variants_matrix 
+        : (typeof p.variants_matrix === 'string' ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })() : []);
+      if (matrix && matrix.length > 0) {
+        return matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0) > 0;
+      }
+      const count = typeof p.stockCount === 'number' ? p.stockCount : (typeof p.stock === 'number' ? p.stock : 50);
+      return count > 0;
+    })(),
     isNew: isNew,
     is_new_arrival: isNew,
     isFeatured: isFeatured,
@@ -2247,6 +2302,68 @@ async function startServer() {
       };
 
       ordersStore.unshift(newOrder as any);
+
+      // Decrement inventory dynamically for each ordered item
+      if (Array.isArray(items)) {
+        items.forEach((item: any) => {
+          const prodId = item.product_id || item.id;
+          const prod = productsStore.find(p => p.id === prodId || p.slug === item.slug);
+          if (prod) {
+            const qty = Number(item.quantity) || 1;
+            // Decrement variant stock if matrix exists
+            if (Array.isArray(prod.variants_matrix) && prod.variants_matrix.length > 0) {
+              const variant = prod.variants_matrix.find((v: any) => 
+                (!item.size || v.size?.toLowerCase() === item.size?.toLowerCase()) &&
+                (!item.color || v.color?.toLowerCase() === item.color?.toLowerCase())
+              );
+              if (variant) {
+                variant.stock = Math.max(0, (Number(variant.stock) || 0) - qty);
+              }
+              const totalMatrixStock = prod.variants_matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+              prod.stock = totalMatrixStock;
+              (prod as any).stockCount = totalMatrixStock;
+            } else {
+              const currentStock = (prod as any).stockCount ?? prod.stock ?? 50;
+              const updatedStock = Math.max(0, currentStock - qty);
+              prod.stock = updatedStock;
+              (prod as any).stockCount = updatedStock;
+            }
+
+            // Check dynamic low stock threshold
+            const threshold = Number(prod.low_stock_threshold ?? 4);
+            const remaining = (prod as any).stockCount ?? prod.stock ?? 0;
+            if (remaining <= threshold) {
+              const alertTitle = remaining === 0 ? 'Out of Stock Alert' : 'Low Stock Alert';
+              const alertMsg = `${prod.name} has only ${remaining} unit${remaining === 1 ? '' : 's'} remaining (threshold: ${threshold}). Replenishment required.`;
+              adminNotificationsStore.unshift({
+                id: `notif-stock-${prod.id}-${Date.now()}`,
+                title: alertTitle,
+                message: alertMsg,
+                type: 'stock',
+                is_read: false,
+                created_at: new Date().toISOString(),
+                link: 'inventory',
+              });
+              logAdminAudit('Stock Alert Triggered', prod.name, 'System', `${remaining} units remaining (threshold: ${threshold})`);
+            }
+          }
+        });
+      }
+
+      // Create new order notification
+      adminNotificationsStore.unshift({
+        id: `notif-order-${newOrder.id}-${Date.now()}`,
+        title: 'New Order Received',
+        message: `Order #${newOrder.order_number} placed by ${shippingAddress?.firstName || 'Customer'} for Rs. ${total.toLocaleString()}`,
+        type: 'order',
+        is_read: false,
+        created_at: new Date().toISOString(),
+        link: 'orders',
+      });
+
+      // Audit log order placement
+      logAdminAudit('Order Placed', newOrder.order_number, shippingAddress?.firstName || 'Customer', `Total: Rs. ${total.toLocaleString()}, Items: ${items?.length || 0}`);
+
       res.status(201).json(newOrder);
     } catch (err: any) {
       console.error('Order creation error:', err);
@@ -2254,21 +2371,30 @@ async function startServer() {
     }
   });
 
-  app.patch('/api/orders/:id/status', optionalAuth, (req, res) => {
+  app.patch('/api/orders/:id/status', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     const order = ordersStore.find((o) => o.id === id || o.order_number === id);
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    const oldStatus = order.status;
     order.status = status;
+    if (sql) {
+      try {
+        await sql`UPDATE orders SET status = ${status}, updated_at = NOW() WHERE id::text = ${id} OR order_number = ${id}`;
+      } catch (e) {
+        console.error('Neon update order status error:', e);
+      }
+    }
+    logAdminAudit('Order Status Changed', `${order.order_number}: ${oldStatus} → ${status}`, req.user?.name || 'Admin');
     res.json(order);
   });
 
   // ==================== REVIEWS ROUTES ====================
   app.get('/api/reviews', (req, res) => {
-    const { product_id, product_slug } = req.query as any;
-    let list = reviewsStore.filter((r) => r.is_approved);
+    const { product_id, product_slug, all } = req.query as any;
+    let list = (all === 'true' || all === true) ? [...reviewsStore] : reviewsStore.filter((r) => r.is_approved);
     if (product_id) {
       list = list.filter((r) => r.product_id === product_id);
     }
@@ -2278,20 +2404,45 @@ async function startServer() {
     res.json(list);
   });
 
+  app.patch('/api/reviews/:id/approval', optionalAuth, (req, res) => {
+    const { id } = req.params;
+    const { is_approved } = req.body;
+    const rev = reviewsStore.find((r) => r.id === id);
+    if (!rev) {
+      return res.status(404).json({ message: 'Review not found' });
+    }
+    rev.is_approved = Boolean(is_approved);
+    logAdminAudit('Review Status Updated', `${rev.user_name} (${rev.product_slug})`, req.user?.name || 'Admin', `Approved: ${rev.is_approved}`);
+    res.json({ success: true, review: rev });
+  });
+
+  app.delete('/api/reviews/:id', optionalAuth, (req, res) => {
+    const { id } = req.params;
+    const revIndex = reviewsStore.findIndex((r) => r.id === id);
+    if (revIndex === -1) {
+      return res.status(404).json({ message: 'Review not found' });
+    }
+    const deleted = reviewsStore.splice(revIndex, 1)[0];
+    logAdminAudit('Review Deleted', `${deleted.user_name} (${deleted.product_slug})`, req.user?.name || 'Admin');
+    res.json({ success: true, message: 'Review deleted' });
+  });
+
   app.post('/api/reviews', optionalAuth, (req, res) => {
     try {
       const { product_id, product_slug, rating, comment, name } = req.body;
+      const targetProd = productsStore.find(p => p.id === product_id || p.slug === product_slug);
       const newReview: Review = {
         id: `rev-${Date.now()}`,
-        product_id: product_id || 'prod-1',
-        product_slug: product_slug || '',
+        product_id: product_id || targetProd?.id || 'prod-1',
+        product_slug: product_slug || targetProd?.slug || '',
         user_name: name || req.user?.name || 'Customer',
         rating: Number(rating) || 5,
         comment: comment || '',
-        is_approved: true,
+        is_approved: false, // Default to pending approval so admin can review
         created_at: new Date().toISOString(),
       };
       reviewsStore.unshift(newReview);
+      logAdminAudit('New Review Submitted', `${newReview.user_name} on ${newReview.product_slug}`, 'Customer');
       res.status(201).json(newReview);
     } catch (err: any) {
       res.status(500).json({ message: 'Error submitting review', error: err.message });
@@ -2455,10 +2606,151 @@ async function startServer() {
     if (!email || !email.includes('@')) {
       return res.status(400).json({ message: 'Valid email is required' });
     }
-    if (!newsletterStore.find((n) => n.email.toLowerCase() === email.toLowerCase())) {
-      newsletterStore.push({ email, date: new Date().toISOString().split('T')[0] });
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = newsletterStore.find((n) => n.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      existing.is_active = true;
+      return res.json({ success: true, message: 'Welcome back! You are subscribed.', subscriber: existing });
     }
-    res.json({ success: true, message: 'Subscribed to Ravenza VIP newsletter' });
+    const newSub = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      email: cleanEmail,
+      date: new Date().toISOString().split('T')[0],
+      is_active: true,
+    };
+    newsletterStore.unshift(newSub);
+    logAdminAudit('Newsletter Subscription', cleanEmail, 'Storefront');
+    res.json({ success: true, message: 'Subscribed to Ravenza VIP newsletter', subscriber: newSub });
+  });
+
+  app.patch('/api/newsletter/:id', optionalAuth, (req, res) => {
+    const { id } = req.params;
+    const { is_active } = req.body;
+    const sub = newsletterStore.find((s) => s.id === id || s.email === id);
+    if (!sub) {
+      return res.status(404).json({ message: 'Subscriber not found' });
+    }
+    sub.is_active = Boolean(is_active);
+    logAdminAudit('Newsletter Status Changed', sub.email, req.user?.name || 'Admin', `Active: ${sub.is_active}`);
+    res.json({ success: true, subscriber: sub });
+  });
+
+  app.delete('/api/newsletter/:id', optionalAuth, (req, res) => {
+    const { id } = req.params;
+    const idx = newsletterStore.findIndex((s) => s.id === id || s.email === id);
+    if (idx === -1) {
+      return res.status(404).json({ message: 'Subscriber not found' });
+    }
+    const deleted = newsletterStore.splice(idx, 1)[0];
+    logAdminAudit('Newsletter Subscriber Deleted', deleted.email, req.user?.name || 'Admin');
+    res.json({ success: true, message: 'Subscriber deleted' });
+  });
+
+  // ==================== EMAIL MARKETING CAMPAIGNS ====================
+  app.get('/api/email-campaigns', optionalAuth, (req, res) => {
+    res.json(emailCampaignsStore);
+  });
+
+  app.post('/api/email-campaigns', optionalAuth, (req, res) => {
+    const { name, subject, content, target_audience } = req.body;
+    if (!subject || !content) {
+      return res.status(400).json({ message: 'Subject and content are required' });
+    }
+    const newCampaign = {
+      id: `camp-${Date.now()}`,
+      name: name || subject,
+      subject,
+      content,
+      target_audience: target_audience || 'all',
+      status: 'draft' as const,
+      recipients: 0,
+      created_at: new Date().toISOString(),
+    };
+    emailCampaignsStore.unshift(newCampaign);
+    logAdminAudit('Email Campaign Created', newCampaign.name, req.user?.name || 'Admin');
+    res.status(201).json(newCampaign);
+  });
+
+  app.post('/api/email-campaigns/:id/send', optionalAuth, async (req, res) => {
+    const { id } = req.params;
+    const campaign = emailCampaignsStore.find((c) => c.id === id);
+    if (!campaign) {
+      return res.status(404).json({ message: 'Campaign not found' });
+    }
+
+    // Determine target recipient emails based on user selection
+    let targetEmails: string[] = [];
+    if (campaign.target_audience === 'subscribers') {
+      targetEmails = newsletterStore.filter((s) => s.is_active).map((s) => s.email);
+    } else if (campaign.target_audience === 'inactive_subscribers') {
+      targetEmails = newsletterStore.filter((s) => !s.is_active).map((s) => s.email);
+    } else if (campaign.target_audience === 'active_customers') {
+      targetEmails = usersStore.filter((u) => u.role === 'customer' && u.is_active).map((u) => u.email);
+    } else {
+      // 'all': newsletter subscribers + customers
+      const emailsSet = new Set<string>();
+      newsletterStore.forEach((s) => emailsSet.add(s.email));
+      usersStore.filter((u) => u.role === 'customer').forEach((u) => emailsSet.add(u.email));
+      targetEmails = Array.from(emailsSet);
+    }
+
+    if (targetEmails.length === 0) {
+      targetEmails = ['subscribers@ravenza.pk'];
+    }
+
+    // Trigger Google Apps Script Webhook
+    let appsScriptUrl = (process.env.APPS_SCRIPT_EMAIL_WEBHOOK || process.env.APPS_SCRIPT_URL || process.env.GAS_WEBHOOK_URL || '').trim();
+    if (appsScriptUrl.startsWith(':')) appsScriptUrl = appsScriptUrl.substring(1).trim();
+    appsScriptUrl = appsScriptUrl.replace(/^["']|["']$/g, '');
+
+    if (appsScriptUrl && appsScriptUrl.startsWith('http')) {
+      try {
+        console.log(`📡 Dispatching campaign "${campaign.subject}" to ${targetEmails.length} recipients via Apps Script...`);
+        await fetch(appsScriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            emails: targetEmails,
+            subject: campaign.subject,
+            content: campaign.content,
+            appName: 'RAVENZA Streetwear'
+          })
+        });
+      } catch (err) {
+        console.warn('Apps Script campaign delivery notice:', err);
+      }
+    } else {
+      console.log(`ℹ️ Campaign simulated dispatch: ${targetEmails.length} recipients for "${campaign.subject}"`);
+    }
+
+    campaign.status = 'sent';
+    campaign.sent_at = new Date().toISOString();
+    campaign.recipients = targetEmails.length;
+
+    logAdminAudit('Email Campaign Dispatched', campaign.name, req.user?.name || 'Admin', `Dispatched to ${targetEmails.length} recipients`);
+
+    adminNotificationsStore.unshift({
+      id: `notif-camp-${Date.now()}`,
+      title: 'Email Campaign Dispatched',
+      message: `Campaign "${campaign.name}" was successfully sent to ${targetEmails.length} recipients.`,
+      type: 'system',
+      is_read: false,
+      created_at: new Date().toISOString(),
+      link: 'email-marketing'
+    });
+
+    res.json({ success: true, message: 'Campaign sent successfully', campaign, totalSent: targetEmails.length });
+  });
+
+  app.delete('/api/email-campaigns/:id', optionalAuth, (req, res) => {
+    const { id } = req.params;
+    const idx = emailCampaignsStore.findIndex((c) => c.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ message: 'Campaign not found' });
+    }
+    const deleted = emailCampaignsStore.splice(idx, 1)[0];
+    logAdminAudit('Email Campaign Deleted', deleted.name, req.user?.name || 'Admin');
+    res.json({ success: true, message: 'Campaign deleted' });
   });
 
   // ==================== OTP VERIFICATION ====================
@@ -2762,26 +3054,36 @@ async function startServer() {
   // ==================== NOTIFICATIONS ROUTES ====================
   app.get('/api/admin/notifications', (req, res) => {
     try {
-      // Dynamic stock checks for automatic alerts (threshold: 5)
-      const lowStockItems = (productsStore || []).filter(p => {
-        if (!p) return false;
-        const stock = (p as any).stockCount ?? (p as any).stock ?? 50;
-        return typeof stock === 'number' && stock <= 5;
-      });
+      // Dynamic stock checks for automatic alerts based on each product's specific low_stock_threshold
+      (productsStore || []).forEach(p => {
+        if (!p || !p.name) return;
+        const threshold = Number(p.low_stock_threshold ?? 4);
 
-      lowStockItems.forEach(item => {
-        if (!item || !item.name) return;
-        const exists = adminNotificationsStore.some(n => n && n.type === 'stock' && n.message && n.message.includes(item.name));
-        if (!exists) {
-          adminNotificationsStore.unshift({
-            id: `notif-stock-${item.id || Date.now()}`,
-            title: 'Critical Low Stock',
-            message: `${item.name} has only ${(item as any).stockCount ?? item.stock ?? 0} units left (threshold: 5).`,
-            type: 'stock',
-            is_read: false,
-            created_at: new Date().toISOString(),
-            link: 'inventory'
-          });
+        let stock = 0;
+        const matrix = Array.isArray(p.variants_matrix) 
+          ? p.variants_matrix 
+          : (typeof p.variants_matrix === 'string' ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })() : []);
+        if (matrix && matrix.length > 0) {
+          stock = matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+        } else if (typeof (p as any).stockCount === 'number') {
+          stock = (p as any).stockCount;
+        } else if (typeof p.stock === 'number') {
+          stock = p.stock;
+        }
+
+        if (stock <= threshold) {
+          const exists = adminNotificationsStore.some(n => n && n.type === 'stock' && n.message && n.message.includes(p.name));
+          if (!exists) {
+            adminNotificationsStore.unshift({
+              id: `notif-stock-${p.id || Date.now()}`,
+              title: stock === 0 ? 'Out of Stock Alert' : 'Critical Low Stock',
+              message: `${p.name} has only ${stock} units remaining (threshold: ${threshold}). Replenishment required.`,
+              type: 'stock',
+              is_read: false,
+              created_at: new Date().toISOString(),
+              link: 'inventory'
+            });
+          }
         }
       });
 
@@ -2790,6 +3092,24 @@ async function startServer() {
       console.error('Error fetching admin notifications:', err);
       res.json(adminNotificationsStore || []);
     }
+  });
+
+  app.post('/api/admin/notifications', optionalAuth, (req, res) => {
+    const { title, message, type, link } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ message: 'Title and message required' });
+    }
+    const newNotif = {
+      id: `notif-custom-${Date.now()}`,
+      title,
+      message,
+      type: type || 'system',
+      is_read: false,
+      created_at: new Date().toISOString(),
+      link: link || 'dashboard'
+    };
+    adminNotificationsStore.unshift(newNotif as any);
+    res.status(201).json(newNotif);
   });
 
   app.put('/api/admin/notifications/:id/read', (req, res) => {
