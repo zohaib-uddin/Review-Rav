@@ -424,3 +424,40 @@ export const couponCodes = pgTable('coupon_codes', {
   codeIdx: index('coupon_codes_code_idx').on(table.code),
   activeIdx: index('coupon_codes_active_idx').on(table.is_active),
 }));
+
+// ==================== NOTIFICATIONS ====================
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').references(() => users.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  message: text('message').notNull(),
+  type: varchar('type', { length: 50 }).notNull().default('info'), // 'info', 'order', 'stock', 'system'
+  link: varchar('link', { length: 500 }), // Internal route for navigation
+  is_read: boolean('is_read').notNull().default(false),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  userIdx: index('notifications_user_idx').on(table.user_id),
+  isReadIdx: index('notifications_is_read_idx').on(table.is_read),
+  createdIdx: index('notifications_created_idx').on(table.created_at),
+}));
+
+// ==================== EMAIL CAMPAIGNS ====================
+export const emailCampaigns = pgTable('email_campaigns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  subject: varchar('subject', { length: 500 }).notNull(),
+  content: text('content').notNull(),
+  target_audience: varchar('target_audience', { length: 50 }).notNull(), // 'all', 'active_customers', 'inactive_customers', 'subscribers'
+  sent_count: integer('sent_count').notNull().default(0),
+  status: varchar('status', { length: 50 }).notNull().default('draft'), // 'draft', 'sending', 'completed'
+  created_by: uuid('created_by').references(() => users.id),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  sent_at: timestamp('sent_at', { withTimezone: true }),
+});
+
+export const emailCampaignRecipients = pgTable('email_campaign_recipients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  campaign_id: uuid('campaign_id').references(() => emailCampaigns.id),
+  email: varchar('email', { length: 255 }).notNull(),
+  status: varchar('status', { length: 50 }).notNull().default('pending'), // 'pending', 'sent', 'failed'
+  sent_at: timestamp('sent_at', { withTimezone: true }),
+});
