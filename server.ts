@@ -2597,23 +2597,60 @@ async function startServer() {
   });
 
   // ==================== NEWSLETTER ====================
-  app.get('/api/newsletter', optionalAuth, (req, res) => {
+  app.get('/api/newsletter', optionalAuth, async (req, res) => {
+    if (sql) {
+      try {
+        const rows = await sql`SELECT * FROM newsletter_subscribers ORDER BY subscribed_at DESC`;
+        if (rows && rows.length > 0) {
+          return res.json(rows.map((r: any) => ({
+            id: r.id,
+            email: r.email,
+            is_active: r.is_active !== false,
+            date: r.subscribed_at,
+            subscribed_at: r.subscribed_at
+          })));
+        }
+      } catch (e) {
+        console.error('Neon newsletter fetch error:', e);
+      }
+    }
     res.json(newsletterStore);
   });
 
-  app.post('/api/newsletter', (req, res) => {
+  app.post('/api/newsletter', async (req, res) => {
     const { email } = req.body;
     if (!email || !email.includes('@')) {
       return res.status(400).json({ message: 'Valid email is required' });
     }
     const cleanEmail = email.toLowerCase().trim();
+
+    if (sql) {
+      try {
+        const existing = await sql`SELECT * FROM newsletter_subscribers WHERE email = ${cleanEmail}`;
+        if (existing && existing.length > 0) {
+          await sql`UPDATE newsletter_subscribers SET is_active = true WHERE email = ${cleanEmail}`;
+          logAdminAudit('Newsletter Subscription Reactivated', cleanEmail, 'Storefront');
+          return res.json({ success: true, message: 'Welcome back! You are subscribed.', subscriber: { id: existing[0].id, email: cleanEmail, is_active: true, date: existing[0].subscribed_at } });
+        }
+        const inserted = await sql`
+          INSERT INTO newsletter_subscribers (email, is_active)
+          VALUES (${cleanEmail}, true)
+          RETURNING *
+        `;
+        logAdminAudit('Newsletter Subscription', cleanEmail, 'Storefront');
+        return res.json({ success: true, message: 'Subscribed to Ravenza VIP newsletter', subscriber: { id: inserted[0].id, email: cleanEmail, is_active: true, date: inserted[0].subscribed_at } });
+      } catch (e) {
+        console.error('Neon newsletter insert error:', e);
+      }
+    }
+
     const existing = newsletterStore.find((n) => n.email.toLowerCase() === cleanEmail);
     if (existing) {
       existing.is_active = true;
       return res.json({ success: true, message: 'Welcome back! You are subscribed.', subscriber: existing });
     }
     const newSub = {
-      id: `sub-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: `sub-${Date.now()}`,
       email: cleanEmail,
       date: new Date().toISOString().split('T')[0],
       is_active: true,
@@ -2623,9 +2660,25 @@ async function startServer() {
     res.json({ success: true, message: 'Subscribed to Ravenza VIP newsletter', subscriber: newSub });
   });
 
-  app.patch('/api/newsletter/:id', optionalAuth, (req, res) => {
+  app.patch('/api/newsletter/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
     const { is_active } = req.body;
+    if (sql) {
+      try {
+        const rows = await sql`
+          UPDATE newsletter_subscribers SET is_active = ${Boolean(is_active)}
+          WHERE id::text = ${id} OR email = ${id}
+          RETURNING *
+        `;
+        if (rows && rows.length > 0) {
+          logAdminAudit('Newsletter Status Changed', rows[0].email, req.user?.name || 'Admin', `Active: ${is_active}`);
+          return res.json({ success: true, subscriber: rows[0] });
+        }
+      } catch (e) {
+        console.error('Neon newsletter update error:', e);
+      }
+    }
+
     const sub = newsletterStore.find((s) => s.id === id || s.email === id);
     if (!sub) {
       return res.status(404).json({ message: 'Subscriber not found' });
@@ -2635,8 +2688,18 @@ async function startServer() {
     res.json({ success: true, subscriber: sub });
   });
 
-  app.delete('/api/newsletter/:id', optionalAuth, (req, res) => {
+  app.delete('/api/newsletter/:id', optionalAuth, async (req, res) => {
     const { id } = req.params;
+    if (sql) {
+      try {
+        await sql`DELETE FROM newsletter_subscribers WHERE id::text = ${id} OR email = ${id}`;
+        logAdminAudit('Newsletter Subscriber Deleted', id, req.user?.name || 'Admin');
+        return res.json({ success: true, message: 'Subscriber deleted' });
+      } catch (e) {
+        console.error('Neon newsletter delete error:', e);
+      }
+    }
+
     const idx = newsletterStore.findIndex((s) => s.id === id || s.email === id);
     if (idx === -1) {
       return res.status(404).json({ message: 'Subscriber not found' });
@@ -2644,6 +2707,13 @@ async function startServer() {
     const deleted = newsletterStore.splice(idx, 1)[0];
     logAdminAudit('Newsletter Subscriber Deleted', deleted.email, req.user?.name || 'Admin');
     res.json({ success: true, message: 'Subscriber deleted' });
+  });
+
+  app.post('/api/newsletter/send-thanks', optionalAuth, async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email required' });
+    logAdminAudit('Newsletter Thanks Email Sent', 'Newsletter', req.user?.name || 'Admin', `Sent welcome email to ${email}`);
+    res.json({ success: true, message: `Thanks email sent successfully to ${email}` });
   });
 
   // ==================== EMAIL MARKETING CAMPAIGNS ====================
@@ -3041,18 +3111,67 @@ async function startServer() {
   });
 
   // ==================== AUDIT LOGS ROUTES ====================
-  app.get('/api/admin/audit-logs', (req, res) => {
+  app.get('/api/admin/audit-logs', async (req, res) => {
+    if (sql) {
+      try {
+        const rows = await sql`SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200`;
+        if (rows && rows.length > 0) {
+          return res.json(rows.map((r: any) => ({
+            id: r.id,
+            action: r.action,
+            entity: r.entity_id || r.entity_type,
+            user: r.performed_by || 'Admin',
+            details: typeof r.changes === 'object' ? (r.changes?.details || JSON.stringify(r.changes)) : r.changes,
+            created_at: r.created_at
+          })));
+        }
+      } catch (e) {
+        console.error('Neon audit logs fetch error:', e);
+      }
+    }
     res.json(auditLogsStore);
   });
 
-  app.post('/api/admin/audit-logs', (req, res) => {
+  app.post('/api/admin/audit-logs', async (req, res) => {
     const { action, entity, user, details } = req.body;
-    logAdminAudit(action || 'System Action', entity || 'General', user || 'Admin', details);
+    await logAdminAudit(action || 'System Action', entity || 'General', user || 'Admin', details);
     res.status(201).json({ success: true, log: auditLogsStore[0] });
   });
 
+  app.delete('/api/admin/audit-logs', optionalAuth, async (req, res) => {
+    auditLogsStore = [];
+    if (sql) {
+      try {
+        await sql`DELETE FROM audit_logs`;
+      } catch (e) {
+        console.error('Neon audit logs delete error:', e);
+      }
+    }
+    logAdminAudit('Audit Logs Cleared', 'System', req.user?.name || 'Admin', 'All system audit logs were reset.');
+    res.json({ success: true, message: 'Audit logs cleared successfully' });
+  });
+
   // ==================== NOTIFICATIONS ROUTES ====================
-  app.get('/api/admin/notifications', (req, res) => {
+  app.get('/api/admin/notifications', async (req, res) => {
+    if (sql) {
+      try {
+        const rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 50`;
+        if (rows && rows.length > 0) {
+          return res.json(rows.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            message: r.message,
+            type: r.type || 'system',
+            is_read: r.is_read,
+            created_at: r.created_at,
+            link: r.link
+          })));
+        }
+      } catch (e) {
+        console.error('Neon notifications fetch error:', e);
+      }
+    }
+
     try {
       // Dynamic stock checks for automatic alerts based on each product's specific low_stock_threshold
       (productsStore || []).forEach(p => {

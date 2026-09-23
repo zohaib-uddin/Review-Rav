@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { 
   LayoutDashboard, Package, ShoppingBag, 
   Search, Edit, Trash2, Plus, Eye, Globe, LogOut,
@@ -32,6 +32,7 @@ import {
 
 export default function AdminPanel() {
   const navigate = useNavigate();
+  const { section } = useParams<{ section?: string }>();
   const { 
     user, 
     products, 
@@ -44,15 +45,21 @@ export default function AdminPanel() {
     fetchCategories 
   } = useStore();
 
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState(section || 'dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [inventorySubTab, setInventorySubTab] = useState<'catalog' | 'stock'>('catalog');
-
-  // Dynamic Admin notifications state
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+
+  // Sync active section with route param
+  useEffect(() => {
+    if (section) {
+      setActiveSection(section);
+    }
+  }, [section]);
 
   // Enforce Administrator role
   useEffect(() => {
@@ -91,7 +98,7 @@ export default function AdminPanel() {
 
   const unreadNotifCount = notifications.filter(n => !n.is_read).length;
 
-  const handleLogout = () => {
+  const handleLogoutConfirm = () => {
     logout();
     navigate('/admin/login', { replace: true });
   };
@@ -260,7 +267,7 @@ export default function AdminPanel() {
             {/* Logout Button */}
             <button
               type="button"
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 hover:text-white hover:bg-red-600/90 transition-all border border-red-900/40"
               title="Sign out of admin console"
             >
@@ -309,6 +316,7 @@ export default function AdminPanel() {
                     key={section.id}
                     onClick={() => {
                       setActiveSection(section.id);
+                      navigate(`/admin/${section.id}`);
                       if (window.innerWidth < 1024) setSidebarOpen(false);
                     }}
                     title={!sidebarOpen ? section.label : undefined}
@@ -682,6 +690,37 @@ export default function AdminPanel() {
             fetchProducts();
           }} 
         />
+      )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-gray-900">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-3 bg-red-100 rounded-xl">
+                <LogOut size={24} />
+              </div>
+              <h3 className="text-lg font-bold">Confirm Logout</h3>
+            </div>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to logout?
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogoutConfirm}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-colors"
+              >
+                Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

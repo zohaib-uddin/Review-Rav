@@ -16,6 +16,7 @@ interface Campaign {
 
 export default function EmailMarketing() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [audienceStats, setAudienceStats] = useState({ subscribers_count: 0, customers_count: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [previewCampaign, setPreviewCampaign] = useState<Campaign | null>(null);
@@ -31,6 +32,7 @@ export default function EmailMarketing() {
 
   useEffect(() => {
     fetchCampaigns();
+    fetchAudienceStats();
   }, []);
 
   const fetchCampaigns = async () => {
@@ -42,6 +44,15 @@ export default function EmailMarketing() {
       console.error('Failed to fetch campaigns:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAudienceStats = async () => {
+    try {
+      const stats = await api.request<{ subscribers_count: number; customers_count: number; total: number }>('/marketing/audience-stats');
+      setAudienceStats(stats);
+    } catch (e) {
+      console.error('Failed to fetch audience stats:', e);
     }
   };
 
@@ -140,12 +151,34 @@ export default function EmailMarketing() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-500">Newsletter Subscribers</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+              <Mail size={16} />
+            </div>
+          </div>
+          <p className="text-2xl font-black font-display text-gray-900">{audienceStats.subscribers_count}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">From newsletter_subscribers</p>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-500">Store Customers</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+              <Users size={16} />
+            </div>
+          </div>
+          <p className="text-2xl font-black font-display text-blue-600">{audienceStats.customers_count}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">From users table</p>
+        </div>
+
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-gray-500">Draft Campaigns</span>
             <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center text-gray-600">
-              <Mail size={16} />
+              <Sparkles size={16} />
             </div>
           </div>
           <p className="text-2xl font-black font-display text-gray-900">{draftCount}</p>
@@ -160,18 +193,7 @@ export default function EmailMarketing() {
             </div>
           </div>
           <p className="text-2xl font-black font-display text-emerald-600">{sentCount}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Successfully sent to subscribers</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500">Total Emails Delivered</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-              <Users size={16} />
-            </div>
-          </div>
-          <p className="text-2xl font-black font-display text-blue-600">{totalDispatched}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Audience impressions achieved</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">Total delivered: {totalDispatched}</p>
         </div>
       </div>
 

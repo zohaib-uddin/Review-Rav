@@ -1,17 +1,51 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Instagram, Facebook, Mail, Phone, MapPin, Shield, Twitter } from 'lucide-react';
+import { Instagram, Facebook, Mail, Phone, MapPin, Shield, Twitter, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import toast from 'react-hot-toast';
 
 export default function Footer() {
   const categories = useStore(state => state.categories);
   const fetchCategories = useStore(state => state.fetchCategories);
+
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [subscribing, setSubscribing] = useState(false);
+  const [subscribedSuccess, setSubscribedSuccess] = useState(false);
 
   useEffect(() => {
     if (categories.length === 0) {
       fetchCategories();
     }
   }, []);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail || !newsletterEmail.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setSubscribing(true);
+      const res = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newsletterEmail })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Successfully subscribed to VIP newsletter!');
+        setSubscribedSuccess(true);
+        setNewsletterEmail('');
+      } else {
+        toast.error(data.message || 'Subscription failed');
+      }
+    } catch (err: any) {
+      toast.error('Error connecting to server. Please try again.');
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   return (
     <footer className="bg-white text-gray-900 border-t border-gray-200">
@@ -20,16 +54,31 @@ export default function Footer() {
         <div className="max-w-7xl mx-auto px-4 py-12 text-center">
           <h3 className="text-2xl font-display font-bold mb-3">JOIN THE RAVENZA FAMILY</h3>
           <p className="text-gray-500 mb-6">Subscribe for exclusive drops, early access & special offers.</p>
-          <div className="flex max-w-md mx-auto">
-            <input 
-              type="email" 
-              placeholder="Enter your email" 
-              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-l-lg focus:outline-none focus:border-black text-sm" 
-            />
-            <button className="px-6 py-3 bg-black text-white font-semibold rounded-r-lg hover:bg-gray-800 text-sm transition-colors">
-              SUBSCRIBE
-            </button>
-          </div>
+          
+          {subscribedSuccess ? (
+            <div className="flex items-center justify-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-200 p-4 rounded-xl max-w-md mx-auto">
+              <CheckCircle2 size={20} />
+              <span className="text-sm font-semibold">Welcome to the VIP family! You are subscribed.</span>
+            </div>
+          ) : (
+            <form onSubmit={handleSubscribe} className="flex max-w-md mx-auto">
+              <input 
+                type="email" 
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="Enter your email" 
+                required
+                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-300 rounded-l-lg focus:outline-none focus:border-black text-sm" 
+              />
+              <button 
+                type="submit"
+                disabled={subscribing}
+                className="px-6 py-3 bg-black text-white font-semibold rounded-r-lg hover:bg-gray-800 text-sm transition-colors disabled:opacity-50"
+              >
+                {subscribing ? 'SUBSCRIBING...' : 'SUBSCRIBE'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
 

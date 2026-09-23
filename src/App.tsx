@@ -78,6 +78,10 @@ function App() {
               path="/admin" 
               element={user?.role === 'admin' ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
             />
+            <Route 
+              path="/admin/:section" 
+              element={user?.role === 'admin' ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
+            />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/signin" element={<Navigate to="/admin/login" replace />} />
 

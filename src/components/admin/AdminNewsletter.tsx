@@ -16,10 +16,26 @@ export default function AdminNewsletter() {
   const [newEmail, setNewEmail] = useState('');
   const [adding, setAdding] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [sendingThanksEmail, setSendingThanksEmail] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSubscribers();
   }, []);
+
+  const handleSendThanks = async (email: string) => {
+    try {
+      setSendingThanksEmail(email);
+      await api.request('/newsletter/send-thanks', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+      });
+      showNotice(`Thanks email successfully sent to ${email}`);
+    } catch (err: any) {
+      showNotice(err.message || 'Failed to send thanks email');
+    } finally {
+      setSendingThanksEmail(null);
+    }
+  };
 
   const fetchSubscribers = async () => {
     setLoading(true);
@@ -237,6 +253,15 @@ export default function AdminNewsletter() {
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleSendThanks(subscriber.email)}
+                          disabled={sendingThanksEmail === subscriber.email}
+                          className="px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1"
+                          title="Send thanks for subscribing email"
+                        >
+                          <Mail size={13} />
+                          <span>{sendingThanksEmail === subscriber.email ? 'Sending...' : 'Send Thanks'}</span>
+                        </button>
                         <button
                           onClick={() => handleToggleActive(subscriber)}
                           className="px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"

@@ -209,6 +209,10 @@ class ApiService {
     }
   }
 
+  async clearAuditLogs() {
+    return this.request<any>('/admin/audit-logs', { method: 'DELETE' });
+  }
+
   // Admin Reviews
   async getAdminReviews() {
     return this.request<any[]>('/reviews?all=true');

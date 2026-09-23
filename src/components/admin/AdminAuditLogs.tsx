@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, Shield, User, Clock, RefreshCw, Search, Filter, 
-  ShoppingCart, Heart, Package, Mail, LogIn, CheckCircle2 
+  ShoppingCart, Heart, Package, Mail, LogIn, CheckCircle2, Trash2, AlertTriangle 
 } from 'lucide-react';
 import api from '../../services/api';
+import toast from 'react-hot-toast';
 
 interface AuditLog {
   id: string;
@@ -19,6 +20,9 @@ export default function AdminAuditLogs() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'auth' | 'cart' | 'order' | 'inventory' | 'marketing'>('all');
+  const [timeRange, setTimeRange] = useState<'all_time' | 'today' | 'yesterday' | '7_days'>('all_time');
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -36,7 +40,27 @@ export default function AdminAuditLogs() {
     fetchLogs();
   }, []);
 
+  const handleClearLogs = async () => {
+    try {
+      setClearing(true);
+      await api.clearAuditLogs();
+      toast.success('Audit logs cleared successfully');
+      setLogs([]);
+      setShowClearModal(false);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to clear audit logs');
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const filteredLogs = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const yesterdayDate = new Date(now.getTime() - 86400000);
+    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+
     return logs.filter(log => {
       const matchSearch = 
         log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -46,6 +70,18 @@ export default function AdminAuditLogs() {
 
       if (!matchSearch) return false;
 
+      // Time range check
+      const logDate = new Date(log.created_at || Date.now());
+      const logDateStr = logDate.toISOString().split('T')[0];
+
+      if (timeRange === 'today') {
+        if (logDateStr !== todayStr) return false;
+      } else if (timeRange === 'yesterday') {
+        if (logDateStr !== yesterdayStr) return false;
+      } else if (timeRange === '7_days') {
+        if (logDate < sevenDaysAgo) return false;
+      }
+
       if (selectedFilter === 'all') return true;
       if (selectedFilter === 'auth') return log.action.includes('LOGIN') || log.action.includes('REGISTER') || log.entity.toLowerCase().includes('user');
       if (selectedFilter === 'cart') return log.action.includes('CART') || log.action.includes('WISHLIST');
@@ -54,7 +90,7 @@ export default function AdminAuditLogs() {
       if (selectedFilter === 'marketing') return log.action.includes('CAMPAIGN') || log.action.includes('NEWSLETTER');
       return true;
     });
-  }, [logs, searchQuery, selectedFilter]);
+  }, [logs, searchQuery, selectedFilter, timeRange]);
 
   const getLogIcon = (action: string) => {
     const act = action.toUpperCase();
@@ -79,6 +115,13 @@ export default function AdminAuditLogs() {
         </div>
         <div className="flex items-center gap-2.5">
           <button
+            onClick={() => setShowClearModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-xl transition-colors border border-red-200"
+          >
+            <Trash2 size={14} />
+            <span>Reset Logs</span>
+          </button>
+          <button
             onClick={fetchLogs}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors"
           >
@@ -88,27 +131,82 @@ export default function AdminAuditLogs() {
         </div>
       </div>
 
+      {/* Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-3 bg-red-100 rounded-xl">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Reset Audit Logs</h3>
+            </div>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to reset audit logs? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t">
+              <button
+                onClick={() => setShowClearModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearLogs}
+                disabled={clearing}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+              >
+                {clearing ? 'Clearing...' : 'Yes, Reset Logs'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filters and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text"
-            placeholder="Search by action, user email, entity or keyword..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black"
-          />
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search by action, user email, entity or keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black"
+            />
+          </div>
+
+          {/* Time Range Tabs */}
+          <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs w-full sm:w-auto overflow-x-auto">
+            {[
+              { id: 'all_time', label: 'All Time' },
+              { id: 'today', label: 'Today' },
+              { id: 'yesterday', label: 'Yesterday' },
+              { id: '7_days', label: '7 Days' },
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTimeRange(t.id as any)}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${
+                  timeRange === t.id ? 'bg-black text-white shadow-xs' : 'text-gray-600 hover:text-black'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs w-full sm:w-auto overflow-x-auto">
+        {/* Category Filters */}
+        <div className="flex items-center gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs overflow-x-auto">
           {[
-            { id: 'all', label: 'All' },
-            { id: 'auth', label: 'Auth' },
-            { id: 'cart', label: 'Cart/Wish' },
-            { id: 'order', label: 'Orders' },
-            { id: 'inventory', label: 'Stock' },
-            { id: 'marketing', label: 'Marketing' },
+            { id: 'all', label: 'All Actions' },
+            { id: 'auth', label: 'Auth & Logins' },
+            { id: 'cart', label: 'Cart & Wishlist' },
+            { id: 'order', label: 'Orders & Payments' },
+            { id: 'inventory', label: 'Products & Stock' },
+            { id: 'marketing', label: 'Marketing & Newsletter' },
           ].map(f => (
             <button
               key={f.id}

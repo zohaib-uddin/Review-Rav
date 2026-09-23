@@ -198,7 +198,14 @@ interface StoreState {
 }
 
 export const useStore = create<StoreState>((set, get) => ({
-  user: null,
+  user: (() => {
+    try {
+      const savedUser = localStorage.getItem('ravenza_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  })(),
   cart: [],
   wishlist: [],
   products: [],
@@ -214,18 +221,23 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       const result = await api.login(email, password);
       api.setToken(result.token);
+      localStorage.setItem('ravenza_user', JSON.stringify(result.user));
       set({ user: result.user, apiAvailable: true });
       api.logAudit('User Login', result.user?.name || email, result.user?.name || email, `Logged in with role: ${result.user?.role}`);
       return true;
     } catch {
       // Fallback to demo mode
       if (email === 'admin@ravenza.pk' && password === 'admin123') {
-        set({ user: { id: 'admin', email, name: 'Admin', role: 'admin', is_verified: true }, apiAvailable: false });
+        const adminUser = { id: 'admin', email, name: 'Admin', role: 'admin' as const, is_verified: true };
+        localStorage.setItem('ravenza_user', JSON.stringify(adminUser));
+        set({ user: adminUser, apiAvailable: false });
         api.logAudit('User Login', 'Admin', 'admin@ravenza.pk', 'Admin dashboard sign-in');
         return true;
       }
       if (email && password.length >= 6) {
-        set({ user: { id: Date.now().toString(), email, name: email.split('@')[0], role: 'customer', is_verified: true }, apiAvailable: false });
+        const custUser = { id: Date.now().toString(), email, name: email.split('@')[0], role: 'customer' as const, is_verified: true };
+        localStorage.setItem('ravenza_user', JSON.stringify(custUser));
+        set({ user: custUser, apiAvailable: false });
         api.logAudit('User Login', email, email, 'Customer storefront sign-in');
         return true;
       }
@@ -237,12 +249,15 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       const result = await api.register(email, name, password);
       api.setToken(result.token);
+      localStorage.setItem('ravenza_user', JSON.stringify(result.user));
       set({ user: result.user, apiAvailable: true });
       api.logAudit('User Registered', name, email, 'New customer account created');
       return true;
     } catch {
       if (email && name && password.length >= 6) {
-        set({ user: { id: Date.now().toString(), email, name, role: 'customer', is_verified: false }, apiAvailable: false });
+        const custUser = { id: Date.now().toString(), email, name, role: 'customer' as const, is_verified: false };
+        localStorage.setItem('ravenza_user', JSON.stringify(custUser));
+        set({ user: custUser, apiAvailable: false });
         api.logAudit('User Registered', name, email, 'New customer account created');
         return true;
       }
@@ -252,6 +267,7 @@ export const useStore = create<StoreState>((set, get) => ({
 
   logout: () => {
     api.clearToken();
+    localStorage.removeItem('ravenza_user');
     set({ user: null, cart: [], wishlist: [] });
   },
 
