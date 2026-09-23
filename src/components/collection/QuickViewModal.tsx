@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { X, Heart, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Product } from '../../store/useStore';
+import { useCart } from '../../context/CartContext';
 
 interface QuickViewModalProps {
   product: Product;
@@ -11,6 +12,7 @@ interface QuickViewModalProps {
 }
 
 export default function QuickViewModal({ product, isOpen, onClose }: QuickViewModalProps) {
+  const { addToCart } = useCart();
   const [currentImage, setCurrentImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
@@ -24,13 +26,12 @@ export default function QuickViewModal({ product, isOpen, onClose }: QuickViewMo
   const nextImage = () => setCurrentImage((prev) => (prev + 1) % images.length);
   const prevImage = () => setCurrentImage((prev) => (prev - 1 + images.length) % images.length);
 
-  const handleAddToCart = () => {
-    if (!selectedSize || !selectedColor) {
-      alert('Please select size and color');
-      return;
-    }
-    // Add to cart logic here
-    console.log('Adding to cart:', { product, size: selectedSize, color: selectedColor });
+  const handleAddToCart = (e: React.MouseEvent) => {
+    const sizeToUse = selectedSize || sizes[0] || 'M';
+    const firstCol = colors[0];
+    const colorToUse = selectedColor || (typeof firstCol === 'string' ? firstCol : firstCol?.name) || 'Black';
+    
+    addToCart(product, sizeToUse, colorToUse, 1, e.currentTarget as HTMLElement);
     onClose();
   };
 

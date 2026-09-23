@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { X, Plus, Trash2, Save, ChevronLeft, ChevronRight, Package, Tag, Image, Palette, Ruler, FileText, Loader2, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useStore, Product } from '../../store/useStore';
 import api from '../../services/api';
+import FileUpload from './FileUpload';
+import { adminToast } from '../../utils/notifications';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -485,12 +487,17 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
       }
       await fetchProducts();
       setSubmitSuccess(true);
+      adminToast.success(
+        product ? 'Product Updated' : 'Product Created',
+        `"${productData.name}" has been ${product ? 'updated' : 'created'} successfully.`
+      );
       setTimeout(() => {
         onClose();
       }, 400);
     } catch (err: any) {
       console.error('Save product error:', err);
       setSubmitError(err.message || 'Failed to save product in Neon DB');
+      adminToast.error('Save Product Failed', err.message || 'Failed to save product');
     } finally {
       setIsSubmitting(false);
     }
@@ -812,34 +819,45 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
             );
           })()}
 
-          {/* Steps 3-6 simplified for brevity */}
+          {/* Step 3: Product Images with PC/Mobile File Upload */}
           {currentStep === 3 && (
-            <div className="space-y-5">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Image size={20} /> Product Images</h3>
-              <div className="flex gap-2">
-                <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="Paste image URL..." className="flex-1 px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black transition-colors text-sm" />
-                <button onClick={addImage} className="px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-1">
-                  <Plus size={16} /> Add
-                </button>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2"><Image size={20} /> Product Images</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Upload product photos from your PC or Mobile device. The first photo is automatically used as the main thumbnail.
+                </p>
               </div>
-              {formData.images.length > 0 ? (
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {formData.images.map((img, i) => (
-                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
-                      <img src={img} alt="" className="w-full h-full object-cover" />
-                      {i === 0 && <span className="absolute top-2 left-2 bg-black text-white text-[10px] px-2 py-0.5 rounded-full font-bold">MAIN</span>}
-                      <button onClick={() => removeImage(i)} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="border-2 border-dashed rounded-xl p-12 text-center text-gray-400">
-                  <Image className="mx-auto mb-3" size={32} />
-                  <p className="text-sm">Add image URLs to build your gallery</p>
-                </div>
-              )}
+
+              <FileUpload
+                multiple={true}
+                value={formData.images}
+                onChange={(newImages) => setFormData({ ...formData, images: newImages as string[] })}
+              />
+
+              <div className="pt-2 border-t border-gray-100">
+                <details className="text-xs text-gray-500">
+                  <summary className="font-semibold cursor-pointer hover:text-black transition-colors py-1">
+                    Or add via direct Image URL (optional)
+                  </summary>
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={e => setImageUrl(e.target.value)}
+                      placeholder="Paste image URL..."
+                      className="flex-1 px-4 py-2.5 border-2 rounded-xl focus:outline-none focus:border-black transition-colors text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={addImage}
+                      className="px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-colors flex items-center gap-1"
+                    >
+                      <Plus size={14} /> Add URL
+                    </button>
+                  </div>
+                </details>
+              </div>
             </div>
           )}
 

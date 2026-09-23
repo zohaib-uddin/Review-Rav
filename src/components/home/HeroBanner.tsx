@@ -1,45 +1,33 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const slides = [
   {
     id: 1,
-    subtitle: 'WINTER ESSENTIALS',
-    title: 'CO-ORD\nSETS',
-    description: 'Premium matching sets for effortless style',
-    cta: 'SHOP NOW',
-    link: '/shop/co-ord-sets',
     image: 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=1920&h=1080&fit=crop',
+    alt: 'Fashion Editorial 1'
   },
   {
     id: 2,
-    subtitle: 'NEW ARRIVALS',
-    title: 'ACID WASH\nTEES',
-    description: 'Bold graphic tees with premium acid wash',
-    cta: 'EXPLORE',
-    link: '/shop/oversize-tees',
     image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1920&h=1080&fit=crop',
+    alt: 'Fashion Editorial 2'
   },
   {
     id: 3,
-    subtitle: 'STREETWEAR',
-    title: 'GRAPHIC\nTROUSERS',
-    description: 'Wide leg trousers with signature prints',
-    cta: 'DISCOVER',
-    link: '/shop/graphic-trousers',
     image: 'https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=1920&h=1080&fit=crop',
+    alt: 'Fashion Editorial 3'
   },
 ];
 
 export default function HeroBanner() {
   const [current, setCurrent] = useState(0);
 
+  // Auto-advance loop every 2 seconds (2000ms) with smooth transitions
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % slides.length);
-    }, 6000);
+    }, 2000);
     return () => clearInterval(timer);
   }, []);
 
@@ -47,96 +35,51 @@ export default function HeroBanner() {
   const prev = () => setCurrent((prev) => (prev - 1 + slides.length) % slides.length);
 
   return (
-    <section className="relative h-[90vh] overflow-hidden bg-black">
+    <section className="relative w-full h-[88vh] sm:h-[92vh] md:h-[96vh] min-h-[640px] overflow-hidden bg-neutral-950 select-none">
+      {/* Background Image Carousel with smooth sliding / crossfade */}
       <AnimatePresence mode="wait">
         <motion.div
           key={slides[current].id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.8 }}
-          className="absolute inset-0"
+          initial={{ opacity: 0, scale: 1.03 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.98 }}
+          transition={{ duration: 0.7, ease: [0.25, 1, 0.5, 1] }}
+          className="absolute inset-0 w-full h-full"
         >
           <img
             src={slides[current].image}
-            alt=""
-            className="w-full h-full object-cover opacity-60"
+            alt={slides[current].alt}
+            className="w-full h-full object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
         </motion.div>
       </AnimatePresence>
 
-      <div className="relative h-full max-w-7xl mx-auto px-4 flex items-center">
-        <motion.div
-          key={current}
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="max-w-2xl"
-        >
-          <motion.p
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="text-white/70 text-sm tracking-[0.3em] mb-4"
-          >
-            {slides[current].subtitle}
-          </motion.p>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-6xl md:text-8xl font-black text-white font-display leading-[0.9] whitespace-pre-line"
-          >
-            {slides[current].title}
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="text-white/70 mt-6 text-lg max-w-md"
-          >
-            {slides[current].description}
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="mt-8 flex gap-4"
-          >
-            <Link
-              to={slides[current].link}
-              className="inline-flex items-center gap-2 bg-white text-black px-8 py-4 font-bold text-sm hover:bg-gray-200 transition-colors rounded-full"
-            >
-              {slides[current].cta} <ArrowRight size={18} />
-            </Link>
-          </motion.div>
-        </motion.div>
-      </div>
-
+      {/* Navigation Controls: Clean Minimalist Left / Right Arrows */}
       <button
         onClick={prev}
-        className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white hover:bg-white/20 transition-all"
+        className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 hover:bg-black/50 text-white rounded-full backdrop-blur-sm border border-white/10 transition-all opacity-80 hover:opacity-100 active:scale-95"
+        aria-label="Previous Slide"
       >
-        <ChevronLeft size={24} />
-      </button>
-      <button
-        onClick={next}
-        className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 p-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white hover:bg-white/20 transition-all"
-      >
-        <ChevronRight size={24} />
+        <ChevronLeft size={26} strokeWidth={2} />
       </button>
 
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3">
+      <button
+        onClick={next}
+        className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 p-3 bg-black/20 hover:bg-black/50 text-white rounded-full backdrop-blur-sm border border-white/10 transition-all opacity-80 hover:opacity-100 active:scale-95"
+        aria-label="Next Slide"
+      >
+        <ChevronRight size={26} strokeWidth={2} />
+      </button>
+
+      {/* Slide Indicators */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5">
         {slides.map((_, i) => (
           <button
             key={i}
             onClick={() => setCurrent(i)}
-            className={`transition-all duration-300 rounded-full ${
-              i === current ? 'w-10 h-2 bg-white' : 'w-2 h-2 bg-white/40'
+            aria-label={`Go to slide ${i + 1}`}
+            className={`transition-all duration-300 rounded-full h-1.5 ${
+              i === current ? 'w-8 bg-white shadow-lg' : 'w-2 bg-white/40 hover:bg-white/70'
             }`}
           />
         ))}

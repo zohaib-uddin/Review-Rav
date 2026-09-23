@@ -56,11 +56,61 @@ class ApiService {
     });
   }
 
+  async sendOTP(email: string) {
+    return this.request<{ success: boolean; message: string; otp?: string }>('/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   async verifyOTP(email: string, otp: string) {
-    return this.request<{ success: boolean }>('/auth/verify-otp', {
+    return this.request<{ success: boolean; token: string; user: any; message?: string }>('/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, otp }),
     });
+  }
+
+  // User Profile
+  async updateProfile(data: { id?: string; name?: string; phone?: string }) {
+    return this.request<{ success: boolean; message: string; user: any }>('/users/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Addresses
+  async getAddresses(userId?: string) {
+    const params = userId ? `?user_id=${userId}` : '';
+    return this.request<any[]>(`/addresses${params}`);
+  }
+
+  async createAddress(data: any) {
+    return this.request<any>('/addresses', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAddress(id: string, data: any) {
+    return this.request<any>(`/addresses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAddress(id: string) {
+    return this.request<any>(`/addresses/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Tracking
+  async trackOrder(orderNumber: string, userId?: string, email?: string) {
+    const params = new URLSearchParams();
+    if (userId) params.set('user_id', userId);
+    if (email) params.set('email', email);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/orders/track/${encodeURIComponent(orderNumber)}${qs}`);
   }
 
   // Products
@@ -118,6 +168,11 @@ class ApiService {
     return this.request<any[]>(`/orders${params}`);
   }
 
+  async getPublicOrderDetails(orderId: string, token?: string) {
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+    return this.request<any>(`/orders/public-details/${orderId}${tokenQuery}`);
+  }
+
   async createOrder(data: any) {
     return this.request<any>('/orders', {
       method: 'POST',
@@ -134,13 +189,20 @@ class ApiService {
 
   // Cart
   async getCart(userId: string) {
-    return this.request<any>(`/cart/${userId}`);
+    return this.request<any[]>(`/cart/${userId}`);
   }
 
   async addToCart(userId: string, productId: string, variantId: string, size: string, color: string, quantity: number) {
     return this.request<any>(`/cart/${userId}`, {
       method: 'POST',
       body: JSON.stringify({ product_id: productId, variant_id: variantId, size, color, quantity }),
+    });
+  }
+
+  async syncCart(userId: string, cart: any[]) {
+    return this.request<any>(`/cart/${userId}/sync`, {
+      method: 'POST',
+      body: JSON.stringify({ cart }),
     });
   }
 
@@ -153,6 +215,14 @@ class ApiService {
 
   async removeFromCart(cartItemId: string) {
     return this.request<any>(`/cart/items/${cartItemId}`, { method: 'DELETE' });
+  }
+
+  // Order Confirmation Email Dispatch
+  async sendOrderConfirmation(orderData: any) {
+    return this.request<any>('/send-order-confirmation', {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    });
   }
 
   // Wishlist

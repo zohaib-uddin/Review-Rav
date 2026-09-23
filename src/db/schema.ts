@@ -9,7 +9,7 @@ export const categories = pgTable('categories', {
   parent_id: uuid('parent_id'),
   description: text('description'),
   badge: varchar('badge', { length: 50 }),
-  cover_image_url: varchar('cover_image_url', { length: 500 }),
+  cover_image_url: text('cover_image_url'),
   tag: varchar('tag', { length: 100 }),
   sort_order: integer('sort_order').notNull().default(0),
   is_active: boolean('is_active').notNull().default(true),
@@ -81,7 +81,7 @@ export const products = pgTable('products', {
   // Media
   badge: varchar('badge', { length: 50 }),
   images: jsonb('images').default([]),
-  image_url: varchar('image_url', { length: 1000 }),
+  image_url: text('image_url'),
   cloudinary_image_id: varchar('cloudinary_image_id', { length: 255 }),
   
   // Variants & Attributes
@@ -130,7 +130,7 @@ export const collections = pgTable('collections', {
   slug: varchar('slug', { length: 255 }).notNull().unique(),
   type: varchar('type', { length: 50 }).notNull(), // 'category', 'warm_chapter', 'collection_focus'
   description: text('description'),
-  image_url: varchar('image_url', { length: 500 }),
+  image_url: text('image_url'),
   product_ids: jsonb('product_ids').default([]),
   display_order: integer('display_order').notNull().default(0),
   is_active: boolean('is_active').notNull().default(true),
@@ -175,7 +175,7 @@ export const journalEntries = pgTable('journal_entries', {
   title: varchar('title', { length: 255 }).notNull(),
   subtitle: varchar('subtitle', { length: 255 }),
   content: text('content').notNull(),
-  featured_image: varchar('featured_image', { length: 500 }),
+  featured_image: text('featured_image'),
   category: varchar('category', { length: 100 }),
   author: varchar('author', { length: 100 }),
   published_date: timestamp('published_date', { withTimezone: true }),
@@ -350,7 +350,7 @@ export const warmChapters = pgTable('warm_chapters', {
   title: varchar('title', { length: 255 }).notNull(),
   subtitle: varchar('subtitle', { length: 255 }),
   slug: varchar('slug', { length: 255 }).notNull().unique(),
-  image_url: varchar('image_url', { length: 500 }).notNull(),
+  image_url: text('image_url').notNull(),
   // Deprecated: product_ids - now using categories directly
   product_ids: jsonb('product_ids').default([]),
   display_order: integer('display_order').notNull().default(0),
@@ -366,13 +366,34 @@ export const warmChapters = pgTable('warm_chapters', {
 // ==================== OTP VERIFICATIONS ====================
 export const otpVerifications = pgTable('otp_verifications', {
   id: uuid('id').primaryKey().defaultRandom(),
-  phone: varchar('phone', { length: 20 }).notNull(),
-  otp_code: varchar('otp_code', { length: 6 }).notNull(),
+  phone: varchar('phone', { length: 20 }),
+  otp_code: varchar('otp_code', { length: 6 }),
   expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
   verified: boolean('verified').notNull().default(false),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  email: varchar('email', { length: 255 }),
+  otp: varchar('otp', { length: 20 }),
 }, (table) => ({
   phoneIdx: index('otp_verifications_phone_idx').on(table.phone),
+  emailIdx: index('otp_verifications_email_idx').on(table.email),
+}));
+
+// ==================== CART ITEMS ====================
+export const cartItems = pgTable('cart_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id),
+  sessionId: varchar('session_id', { length: 255 }),
+  productId: uuid('product_id').references(() => products.id).notNull(),
+  variantId: uuid('variant_id'),
+  size: varchar('size', { length: 20 }).notNull(),
+  color: varchar('color', { length: 50 }).notNull(),
+  quantity: integer('quantity').notNull().default(1),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  userIdx: index('cart_items_user_idx').on(table.userId),
+  sessionIdx: index('cart_items_session_idx').on(table.sessionId),
+  productIdx: index('cart_items_product_idx').on(table.productId),
 }));
 
 // ==================== ADDRESSES ====================

@@ -94,6 +94,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  phone?: string;
   role: 'customer' | 'admin';
   is_verified?: boolean;
 }
@@ -187,8 +188,10 @@ interface StoreState {
   fetchProducts: () => Promise<void>;
   fetchCategories: () => Promise<void>;
   fetchFeaturedCategories: () => Promise<void>;
+  fetchWishlist: () => Promise<void>;
   fetchOrders: () => Promise<void>;
   fetchWarmChapters: () => Promise<void>;
+  fetchCart: () => Promise<void>;
   addOrder: (order: Order) => void;
   updateOrderStatus: (orderId: string, status: string) => void;
   updateProduct: (id: string, data: Partial<Product>) => void;
@@ -206,7 +209,19 @@ export const useStore = create<StoreState>((set, get) => ({
       return null;
     }
   })(),
-  cart: [],
+  cart: (() => {
+    try {
+      const savedUser = localStorage.getItem('ravenza_user');
+      if (!savedUser) {
+        // Guest user reads from local/session guest cart
+        const guestCart = localStorage.getItem('ravenza_guest_cart') || sessionStorage.getItem('ravenza_guest_cart');
+        return guestCart ? JSON.parse(guestCart) : [];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  })(),
   wishlist: [],
   products: [],
   categories: [],
@@ -217,6 +232,19 @@ export const useStore = create<StoreState>((set, get) => ({
   isLoading: false,
   apiAvailable: false,
 
+  fetchCart: async () => {
+    const { user } = get();
+    if (!user || !user.id) return;
+    try {
+      const items = await api.getCart(user.id);
+      if (Array.isArray(items)) {
+        set({ cart: items });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch user cart from database:', err);
+    }
+  },
+
   login: async (email: string, password: string) => {
     try {
       const result = await api.login(email, password);
@@ -224,6 +252,10 @@ export const useStore = create<StoreState>((set, get) => ({
       localStorage.setItem('ravenza_user', JSON.stringify(result.user));
       set({ user: result.user, apiAvailable: true });
       api.logAudit('User Login', result.user?.name || email, result.user?.name || email, `Logged in with role: ${result.user?.role}`);
+      // Clear guest cart and load persistent cart from database
+      localStorage.removeItem('ravenza_guest_cart');
+      sessionStorage.removeItem('ravenza_guest_cart');
+      get().fetchCart();
       return true;
     } catch {
       // Fallback to demo mode
@@ -252,6 +284,9 @@ export const useStore = create<StoreState>((set, get) => ({
       localStorage.setItem('ravenza_user', JSON.stringify(result.user));
       set({ user: result.user, apiAvailable: true });
       api.logAudit('User Registered', name, email, 'New customer account created');
+      localStorage.removeItem('ravenza_guest_cart');
+      sessionStorage.removeItem('ravenza_guest_cart');
+      get().fetchCart();
       return true;
     } catch {
       if (email && name && password.length >= 6) {
@@ -268,47 +303,117 @@ export const useStore = create<StoreState>((set, get) => ({
   logout: () => {
     api.clearToken();
     localStorage.removeItem('ravenza_user');
+    // Clear screen cart on logout; persistent cart remains safely stored in Neon DB for next login
     set({ user: null, cart: [], wishlist: [] });
   },
 
   addToCart: (product, size, color) => {
-    const { cart } = get();
+    const { cart, user } = get();
     const existing = cart.find(item => item.product.id === product.id && item.size === size && item.color === color);
+    let updatedCart: CartItem[];
     if (existing) {
-      set({ cart: cart.map(item =>
+      updatedCart = cart.map(item =>
         item.product.id === product.id && item.size === size && item.color === color
           ? { ...item, quantity: item.quantity + 1 } : item
-      )});
+      );
     } else {
-      set({ cart: [...cart, { product, quantity: 1, size, color }] });
+      updatedCart = [...cart, { product, quantity: 1, size, color }];
     }
+    set({ cart: updatedCart });
+
+    // Sync to Neon database cart_items table if logged in; otherwise keep strictly in local/session guest storage
+    if (user && user.id) {
+      api.syncCart(user.id, updatedCart).catch((err) => console.warn('Sync cart error:', err));
+    } else {
+      try {
+        localStorage.setItem('ravenza_guest_cart', JSON.stringify(updatedCart));
+      } catch {}
+    }
+
     // Audit log item added to cart
-    api.logAudit('Item Added to Cart', product.name, get().user?.name || get().user?.email || 'Storefront Visitor', `Size: ${size}, Color: ${color}`);
+    api.logAudit('Item Added to Cart', product.name, user?.name || user?.email || 'Storefront Visitor', `Size: ${size}, Color: ${color}`);
   },
 
   removeFromCart: (productId, size) => {
-    set({ cart: get().cart.filter(item => !(item.product.id === productId && item.size === size)) });
+    const { cart, user } = get();
+    const updatedCart = cart.filter(item => !(item.product.id === productId && item.size === size));
+    set({ cart: updatedCart });
+
+    if (user && user.id) {
+      api.syncCart(user.id, updatedCart).catch((err) => console.warn('Sync cart error:', err));
+    } else {
+      try {
+        localStorage.setItem('ravenza_guest_cart', JSON.stringify(updatedCart));
+      } catch {}
+    }
   },
 
   updateCartQuantity: (productId, size, quantity) => {
     if (quantity <= 0) { get().removeFromCart(productId, size); return; }
-    set({ cart: get().cart.map(item =>
+    const { cart, user } = get();
+    const updatedCart = cart.map(item =>
       item.product.id === productId && item.size === size ? { ...item, quantity } : item
-    )});
+    );
+    set({ cart: updatedCart });
+
+    if (user && user.id) {
+      api.syncCart(user.id, updatedCart).catch((err) => console.warn('Sync cart error:', err));
+    } else {
+      try {
+        localStorage.setItem('ravenza_guest_cart', JSON.stringify(updatedCart));
+      } catch {}
+    }
   },
 
-  clearCart: () => set({ cart: [] }),
+  clearCart: () => {
+    const { user } = get();
+    set({ cart: [] });
+    if (user && user.id) {
+      api.syncCart(user.id, []).catch((err) => console.warn('Sync cart clear error:', err));
+    } else {
+      try {
+        localStorage.removeItem('ravenza_guest_cart');
+        sessionStorage.removeItem('ravenza_guest_cart');
+      } catch {}
+    }
+  },
 
   toggleWishlist: (productId) => {
     const { wishlist, products, user } = get();
+    if (!user) {
+      return;
+    }
     const targetProd = products.find(p => p.id === productId);
     const prodName = targetProd?.name || productId;
-    if (wishlist.includes(productId)) {
+    const isAdding = !wishlist.includes(productId);
+
+    if (!isAdding) {
       set({ wishlist: wishlist.filter(id => id !== productId) });
-      api.logAudit('Wishlist Item Removed', prodName, user?.name || user?.email || 'Storefront Visitor');
+      api.logAudit('Wishlist Item Removed', prodName, user.name || user.email);
     } else {
       set({ wishlist: [...wishlist, productId] });
-      api.logAudit('Wishlist Item Added', prodName, user?.name || user?.email || 'Storefront Visitor');
+      api.logAudit('Wishlist Item Added', prodName, user.name || user.email);
+    }
+
+    // Persist to Neon DB
+    api.toggleWishlist(user.id, productId).catch((err) => {
+      console.warn('Could not persist wishlist to DB:', err);
+    });
+  },
+
+  fetchWishlist: async () => {
+    const { user } = get();
+    if (!user) {
+      set({ wishlist: [] });
+      return;
+    }
+    try {
+      const items = await api.getWishlist(user.id);
+      if (Array.isArray(items)) {
+        set({ wishlist: items.map((p: any) => p.id || p) });
+      }
+    } catch (err) {
+      console.warn('Error fetching wishlist:', err);
     }
   },
 
@@ -361,11 +466,16 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   fetchOrders: async () => {
+    const { user } = get();
+    if (!user) {
+      set({ orders: [] });
+      return;
+    }
     try {
-      const orders = await api.getOrders();
-      set({ orders, apiAvailable: true });
+      const orders = await api.getOrders(user.role === 'admin' ? undefined : user.id);
+      set({ orders: Array.isArray(orders) ? orders : [], apiAvailable: true });
     } catch {
-      set({ apiAvailable: false });
+      set({ orders: [], apiAvailable: false });
     }
   },
 
@@ -418,3 +528,15 @@ export const useStore = create<StoreState>((set, get) => ({
     // In production, this would call api.addReview(review)
   },
 }));
+
+// Initialize persistent cart from Neon database if user session is active
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    try {
+      const state = useStore.getState();
+      if (state.user?.id) {
+        state.fetchCart();
+      }
+    } catch {}
+  }, 50);
+}

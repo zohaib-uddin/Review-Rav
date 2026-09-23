@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Edit, Trash2, Save, X, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import FileUpload from './FileUpload';
+import { adminToast } from '../../utils/notifications';
 
 export default function AdminCategories() {
   const { categories, fetchCategories, featuredCategories, fetchFeaturedCategories } = useStore();
@@ -59,11 +61,21 @@ export default function AdminCategories() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message);
+        let errMessage = `Error ${response.status}: Failed to save category`;
+        try {
+          const errData = await response.json();
+          errMessage = errData.message || errMessage;
+        } catch (_) {
+          errMessage = response.statusText || errMessage;
+        }
+        throw new Error(errMessage);
       }
 
       const savedCategory = await response.json();
+      adminToast.success(
+        editingCategory ? 'Category Updated' : 'Category Created',
+        `"${formData.name}" has been ${editingCategory ? 'updated' : 'created'} successfully.`
+      );
       setShowForm(false);
       setEditingCategory(null);
       setFormData({
@@ -85,6 +97,7 @@ export default function AdminCategories() {
       await useStore.getState().fetchWarmChapters();
     } catch (error: any) {
       setValidationError(error.message);
+      adminToast.error('Category Save Failed', error.message);
     }
   };
 
@@ -108,18 +121,23 @@ export default function AdminCategories() {
   };
 
   const handleDelete = async (id: string) => {
+    const cat = categories.find(c => c.id === id);
     if (confirm('Are you sure you want to delete this category?')) {
       try {
         const response = await fetch(`/api/categories/${id}`, {
           method: 'DELETE',
         });
         if (response.ok) {
+          adminToast.success('Category Deleted', `"${cat?.name || 'Category'}" was deleted.`);
           await fetchCategories();
           await fetchFeaturedCategories();
           await useStore.getState().fetchWarmChapters();
+        } else {
+          adminToast.error('Delete Failed', 'Could not delete category.');
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Delete category error:', e);
+        adminToast.error('Delete Failed', e.message);
       }
     }
   };
@@ -130,6 +148,7 @@ export default function AdminCategories() {
     // Validation: Check if trying to enable when 4 already exist
     if (newValue && featuredCount >= 4) {
       setValidationError('Maximum 4 categories can be featured in Collections in Focus');
+      adminToast.error('Featured Limit Reached', 'Maximum 4 categories can be featured in Collections in Focus');
       return;
     }
 
@@ -145,10 +164,15 @@ export default function AdminCategories() {
         throw new Error(error.message);
       }
 
+      adminToast.success(
+        'Collections in Focus Updated',
+        `"${category.name}" is now ${newValue ? 'featured' : 'hidden'} in Collections in Focus.`
+      );
       fetchCategories();
       fetchFeaturedCategories();
     } catch (error: any) {
       setValidationError(error.message);
+      adminToast.error('Update Failed', error.message);
     }
   };
 
@@ -166,10 +190,15 @@ export default function AdminCategories() {
         throw new Error(error.message);
       }
 
+      adminToast.success(
+        'Warm Chapter Updated',
+        `"${category.name}" is now ${newValue ? 'enabled' : 'disabled'} in Warm Chapters on Homepage.`
+      );
       fetchCategories();
       useStore.getState().fetchWarmChapters();
     } catch (error: any) {
       setValidationError(error.message);
+      adminToast.error('Update Failed', error.message);
     }
   };
 
@@ -487,15 +516,18 @@ export default function AdminCategories() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Cover Image URL</label>
-                <input
-                  type="url"
+
+              {/* 16:9 Aspect Ratio Category Hero Image Upload */}
+              <div className="bg-neutral-50 p-4 rounded-2xl border border-gray-200">
+                <FileUpload
+                  label="Category Cover & Collection Hero Image (16:9 Ratio)"
+                  helperText="Upload landscape image from PC or Mobile. Shown in Collection page hero section and Mega Menu."
+                  aspectRatio="16:9"
                   value={formData.cover_image_url}
-                  onChange={e => setFormData({ ...formData, cover_image_url: e.target.value })}
-                  className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:border-black"
+                  onChange={(val) => setFormData({ ...formData, cover_image_url: val as string })}
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-1.5">Parent Category</label>
                 <select

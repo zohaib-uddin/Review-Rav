@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import { Mail, KeyRound, ArrowRight, Shield, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import toast from 'react-hot-toast';
+import { frontendToast } from '../utils/notifications';
+import api from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -121,9 +123,19 @@ export default function Login() {
         is_verified: true,
       };
 
+      if (data.token) {
+        localStorage.setItem('ravenza_token', data.token);
+        api.setToken(data.token);
+      }
+      localStorage.setItem('ravenza_user', JSON.stringify(customerUser));
       useStore.setState({ user: customerUser });
-      toast.success('Signed in successfully!');
-      navigate('/dashboard');
+      useStore.getState().fetchCart();
+      useStore.getState().fetchOrders();
+      useStore.getState().fetchWishlist();
+
+      frontendToast.login(customerUser.name || customerUser.email);
+      const redirectParam = new URLSearchParams(location.search).get('redirect');
+      navigate(redirectParam || '/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to verify OTP code.');
     } finally {

@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { SlidersHorizontal, LayoutGrid, Grid3X3 } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { SlidersHorizontal, LayoutGrid, Grid3X3, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import QuickViewModal from '../components/collection/QuickViewModal';
-import CollectionHero from '../components/CollectionHero';
 import ProductCard from '../components/ProductCard';
 import MiniProductCard from '../components/MiniProductCard';
 import FilterSidebar, { FilterState } from '../components/collection/FilterSidebar';
 
 export default function CollectionPage() {
-  const { categorySlug } = useParams();
+  const { categorySlug } = useParams<{ categorySlug?: string }>();
+  const navigate = useNavigate();
   const { products, categories, isLoading, fetchProducts, fetchCategories } = useStore();
   const [quickViewProduct, setQuickViewProduct] = useState<any>(null);
 
   // Layout & Filter states
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [gridDensity, setGridDensity] = useState<'standard' | 'dense'>('standard'); // standard = 6 per row, dense = 15 per row
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [gridDensity, setGridDensity] = useState<'standard' | 'dense'>('standard');
   const [sortBy, setSortBy] = useState('featured');
 
   // Unified Filter state
@@ -29,6 +29,7 @@ export default function CollectionPage() {
     isFeatured: false,
     isNewArrival: false,
     inStockOnly: false,
+    availability: 'all',
     tags: [],
   });
 
@@ -39,12 +40,18 @@ export default function CollectionPage() {
 
   const normalizedSlug = categorySlug ? decodeURIComponent(categorySlug).toLowerCase().trim() : '';
 
+  // Match category by slug, id, or normalized name
   const matchedCategory = categories.find(
     (c) =>
       c.slug?.toLowerCase() === normalizedSlug ||
-      c.id === categorySlug ||
+      c.id?.toLowerCase() === normalizedSlug ||
       c.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') === normalizedSlug
   );
+
+  const isSubcategory = Boolean(matchedCategory?.parent_id);
+  const parentCategory = isSubcategory
+    ? categories.find((c) => c.id === matchedCategory?.parent_id)
+    : null;
 
   const category =
     matchedCategory ||
@@ -56,6 +63,7 @@ export default function CollectionPage() {
             .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
             .join(' '),
           slug: categorySlug,
+          parent_id: null,
           description: `Explore our premium ${categorySlug.replace(/-/g, ' ')} streetwear collection.`,
           cover_image_url:
             'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=1600&h=600&fit=crop',
@@ -66,34 +74,86 @@ export default function CollectionPage() {
         }
       : null);
 
-  // Subcategories
-  const subcategories = categories.filter((c) => c.parent_id === matchedCategory?.id);
+  // Subcategories to display in pills navigation
+  const subcategories = useMemo(() => {
+    if (!category) return [];
+    if (isSubcategory && parentCategory) {
+      // Sibling subcategories of the same parent
+      return categories.filter((c) => c.parent_id === parentCategory.id && c.is_active !== false);
+    }
+    // Direct child subcategories of this main category
+    return categories.filter((c) => c.parent_id === matchedCategory?.id && c.is_active !== false);
+  }, [category, isSubcategory, parentCategory, matchedCategory, categories]);
 
-  // Base collection products before user filters
+  // Main category for the "All" pill button
+  const mainCategorySlug = isSubcategory && parentCategory ? parentCategory.slug : categorySlug;
+  const mainCategoryName = isSubcategory && parentCategory ? parentCategory.name : category?.name;
+
+  // 16:9 Aspect Ratio Hero Image Resolution:
+  // If current category has a cover_image_url, use it.
+  // Else if it is a subcategory without an image, fallback to parent category's cover_image_url!
+  const heroImageUrl = useMemo(() => {
+    if (matchedCategory?.cover_image_url) {
+      return matchedCategory.cover_image_url;
+    }
+    if (isSubcategory && parentCategory?.cover_image_url) {
+      return parentCategory.cover_image_url;
+    }
+    if (category?.cover_image_url) {
+      return category.cover_image_url;
+    }
+    return 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=1920&h=1080&fit=crop';
+  }, [matchedCategory, isSubcategory, parentCategory, category]);
+
+  // Base collection products before sidebar filters
   const baseCollectionProducts = useMemo(() => {
-    if (!categorySlug || products.length === 0) return products;
+    if (!categorySlug || categorySlug === 'all') return products;
+    if (products.length === 0) return [];
 
-    const subcategorySlugs = matchedCategory
-      ? categories
-          .filter((c) => c.parent_id === matchedCategory.id)
-          .map((c) => c.slug.toLowerCase())
+    if (isSubcategory && matchedCategory) {
+      // Subcategory page: ONLY include products strictly assigned to this subcategory
+      return products.filter((p) => {
+        const subId = p.subcategory_id;
+        const subSlug = ((p as any).subcategory_slug || '').toLowerCase();
+        const pCatSlug = ((p as any).category_slug || p.category || '').toLowerCase();
+
+        return (
+          subId === matchedCategory.id ||
+          subSlug === normalizedSlug ||
+          pCatSlug === normalizedSlug ||
+          p.category_id === matchedCategory.id
+        );
+      });
+    }
+
+    // Main Category: include products in this main category + all products in its child subcategories
+    const childSubcategoryIds = matchedCategory
+      ? categories.filter((c) => c.parent_id === matchedCategory.id).map((c) => c.id)
+      : [];
+    const childSubcategorySlugs = matchedCategory
+      ? categories.filter((c) => c.parent_id === matchedCategory.id).map((c) => (c.slug || '').toLowerCase())
       : [];
 
-    const matched = products.filter((p) => {
-      const pCatSlug = (p.category_slug || p.category || '').toLowerCase();
+    return products.filter((p) => {
+      const pCatSlug = ((p as any).category_slug || p.category || '').toLowerCase();
       const pCatId = p.category_id;
-      return (
+      const pSubId = p.subcategory_id;
+      const pSubSlug = ((p as any).subcategory_slug || '').toLowerCase();
+
+      const matchesMain =
         pCatSlug === normalizedSlug ||
-        (matchedCategory &&
-          (pCatId === matchedCategory.id || pCatSlug === matchedCategory.slug?.toLowerCase())) ||
-        subcategorySlugs.includes(pCatSlug)
-      );
+        (matchedCategory && pCatId === matchedCategory.id);
+
+      const matchesChildSub =
+        (pSubId && childSubcategoryIds.includes(pSubId)) ||
+        (pSubSlug && childSubcategorySlugs.includes(pSubSlug)) ||
+        childSubcategorySlugs.includes(pCatSlug);
+
+      return matchesMain || matchesChildSub;
     });
+  }, [categorySlug, products, categories, matchedCategory, normalizedSlug, isSubcategory]);
 
-    return matched.length > 0 ? matched : products;
-  }, [categorySlug, products, categories, matchedCategory, normalizedSlug]);
-
-  // Extract available sizes, colors, and prices from products
+  // Extract available sizes and colors from this collection
   const availableSizes = useMemo(() => {
     const s = new Set<string>();
     baseCollectionProducts.forEach((p) => p.sizes?.forEach((sz: string) => s.add(sz)));
@@ -117,7 +177,7 @@ export default function CollectionPage() {
     return Math.max(max, 5000);
   }, [products]);
 
-  // Set initial price range max
+  // Sync categorySlug & maxPossiblePrice with filterState
   useEffect(() => {
     setFilterState((prev) => ({
       ...prev,
@@ -126,19 +186,28 @@ export default function CollectionPage() {
     }));
   }, [categorySlug, maxPossiblePrice]);
 
-  // Apply detailed dynamic filtering
+  // Apply detailed sidebar dynamic filtering
   const filteredProducts = useMemo(() => {
     let list = [...baseCollectionProducts];
 
-    // Filter by category if explicitly changed in filter sidebar
-    if (
-      filterState.categorySlug &&
-      filterState.categorySlug !== 'all' &&
-      filterState.categorySlug !== categorySlug
-    ) {
+    // Availability Filter (All, In Stock, Out of Stock/Sold)
+    if (filterState.availability === 'in_stock' || filterState.inStockOnly) {
       list = list.filter((p) => {
-        const pSlug = (p.category_slug || p.category || '').toLowerCase();
-        return pSlug === filterState.categorySlug?.toLowerCase();
+        const isOutOfStock =
+          (p.stockCount !== undefined && Number(p.stockCount) <= 0) ||
+          (p.stock !== undefined && Number(p.stock) <= 0) ||
+          p.inStock === false ||
+          (p as any).is_in_stock === false;
+        return !isOutOfStock;
+      });
+    } else if (filterState.availability === 'out_of_stock') {
+      list = list.filter((p) => {
+        const isOutOfStock =
+          (p.stockCount !== undefined && Number(p.stockCount) <= 0) ||
+          (p.stock !== undefined && Number(p.stock) <= 0) ||
+          p.inStock === false ||
+          (p as any).is_in_stock === false;
+        return isOutOfStock;
       });
     }
 
@@ -167,25 +236,20 @@ export default function CollectionPage() {
 
     // Best Seller
     if (filterState.isBestSeller) {
-      list = list.filter((p) => p.is_best_seller || p.isBestseller);
+      list = list.filter((p) => p.is_best_seller || (p as any).isBestseller);
     }
 
     // Featured
     if (filterState.isFeatured) {
-      list = list.filter((p) => p.is_featured || p.isFeatured);
+      list = list.filter((p) => p.is_featured || (p as any).isFeatured);
     }
 
     // New Arrival
     if (filterState.isNewArrival) {
-      list = list.filter((p) => p.is_new_arrival || p.isNew);
+      list = list.filter((p) => p.is_new_arrival || (p as any).isNew);
     }
 
-    // In Stock Only
-    if (filterState.inStockOnly) {
-      list = list.filter((p) => (p.stockCount ?? 1) > 0 && p.inStock !== false);
-    }
-
-    // Tags
+    // Tags / Material / Fit
     if (filterState.tags.length > 0) {
       list = list.filter((p) => {
         const textToSearch = `${p.name} ${p.description || ''} ${p.fabric || ''} ${p.fabric_composition || ''} ${p.fit || ''}`.toLowerCase();
@@ -207,6 +271,12 @@ export default function CollectionPage() {
             Number(b.base_price || b.price || 0) - Number(a.base_price || a.price || 0)
         );
         break;
+      case 'best-seller':
+        list.sort(
+          (a, b) =>
+            (b.is_best_seller ? 1 : 0) - (a.is_best_seller ? 1 : 0)
+        );
+        break;
       case 'newest':
         list.sort(
           (a, b) =>
@@ -214,7 +284,7 @@ export default function CollectionPage() {
             new Date(a.created_at || '').getTime()
         );
         break;
-      default:
+      default: // featured
         list.sort((a, b) => {
           if (a.is_featured && !b.is_featured) return -1;
           if (!a.is_featured && b.is_featured) return 1;
@@ -227,7 +297,7 @@ export default function CollectionPage() {
     }
 
     return list;
-  }, [baseCollectionProducts, filterState, sortBy, categorySlug]);
+  }, [baseCollectionProducts, filterState, sortBy]);
 
   const handleResetFilters = () => {
     setFilterState({
@@ -239,6 +309,7 @@ export default function CollectionPage() {
       isFeatured: false,
       isNewArrival: false,
       inStockOnly: false,
+      availability: 'all',
       tags: [],
     });
   };
@@ -250,7 +321,7 @@ export default function CollectionPage() {
     (filterState.isBestSeller ? 1 : 0) +
     (filterState.isFeatured ? 1 : 0) +
     (filterState.isNewArrival ? 1 : 0) +
-    (filterState.inStockOnly ? 1 : 0) +
+    (filterState.availability && filterState.availability !== 'all' ? 1 : 0) +
     filterState.tags.length;
 
   if (categories.length === 0 && products.length === 0 && isLoading) {
@@ -258,7 +329,7 @@ export default function CollectionPage() {
       <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
           <div className="w-10 h-10 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
             Loading Collection...
           </p>
         </div>
@@ -270,20 +341,20 @@ export default function CollectionPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white px-4">
         <div className="text-center max-w-md">
-          <p className="text-xs font-bold uppercase tracking-widest text-red-600 mb-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-400 mb-2">
             Notice
           </p>
           <h2 className="text-2xl font-bold uppercase tracking-tight mb-3">
             Category Not Found
           </h2>
-          <p className="text-sm text-gray-500 mb-6">
-            The requested collection could not be loaded.
+          <p className="text-sm text-neutral-500 mb-6">
+            The requested collection could not be found.
           </p>
           <Link
-            to="/"
-            className="inline-block px-6 py-3 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-gray-800 transition-colors"
+            to="/shop"
+            className="inline-block px-6 py-3 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors"
           >
-            Back to Home
+            Explore All Collections
           </Link>
         </div>
       </div>
@@ -292,31 +363,105 @@ export default function CollectionPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <CollectionHero category={category} />
+      {/* 16:9 Aspect Ratio Hero Section */}
+      <div className="w-full bg-neutral-950">
+        <div className="w-full relative aspect-[16/9] max-h-[580px] overflow-hidden select-none">
+          <img
+            src={heroImageUrl}
+            alt={category.name}
+            className="w-full h-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/25" />
 
-      {/* Subcategory Navigation Bar */}
+          <div className="absolute inset-0 flex flex-col justify-end p-6 sm:p-10 md:p-14 text-white">
+            <nav className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-white/70 mb-2.5">
+              <Link to="/" className="hover:text-white transition-colors">
+                Home
+              </Link>
+              <span>/</span>
+              <Link to="/shop" className="hover:text-white transition-colors">
+                Collections
+              </Link>
+              {isSubcategory && parentCategory && (
+                <>
+                  <span>/</span>
+                  <Link
+                    to={`/collections/${parentCategory.slug}`}
+                    className="hover:text-white transition-colors"
+                  >
+                    {parentCategory.name}
+                  </Link>
+                </>
+              )}
+              <span>/</span>
+              <span className="text-white font-semibold">{category.name}</span>
+            </nav>
+
+            {category.tag && (
+              <span className="text-[11px] font-mono uppercase tracking-[0.25em] text-amber-400 mb-1 font-bold">
+                {category.tag}
+              </span>
+            )}
+
+            <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight text-white leading-none">
+              {category.name}
+            </h1>
+
+            {category.description && (
+              <p className="text-xs sm:text-sm text-white/80 mt-2.5 max-w-2xl leading-relaxed line-clamp-2">
+                {category.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Subcategory Navigation Pills Bar (if category has subcategories or sibling subcategories) */}
       {subcategories.length > 0 && (
-        <div className="bg-white border-b sticky top-[64px] z-10 shadow-sm">
-          <div className="w-full px-4 py-3">
-            <div className="flex gap-2 overflow-x-auto">
+        <div className="bg-white border-b border-gray-200">
+          <div className="w-full px-4 sm:px-6 py-2.5">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-0.5">
               <Link
-                to={`/collections/${categorySlug}`}
-                className="px-4 py-2 bg-black text-white text-xs font-bold uppercase tracking-wider whitespace-nowrap"
+                to={`/collections/${mainCategorySlug}`}
+                className={`px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-colors rounded-sm ${
+                  !isSubcategory
+                    ? 'bg-black text-white shadow-sm'
+                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-black'
+                }`}
               >
-                All {category.name}
+                All {mainCategoryName}
               </Link>
               {subcategories.map((sub) => {
-                const productCount = products.filter((p) => p.category === sub.slug).length;
+                const isSubActive =
+                  normalizedSlug === (sub.slug || '').toLowerCase() ||
+                  matchedCategory?.id === sub.id;
+                const subProductCount = products.filter(
+                  (p) =>
+                    p.subcategory_id === sub.id ||
+                    ((p as any).subcategory_slug || '').toLowerCase() === (sub.slug || '').toLowerCase() ||
+                    p.category === sub.slug ||
+                    p.category_id === sub.id
+                ).length;
+
                 return (
                   <Link
-                    key={sub.slug}
+                    key={sub.slug || sub.id}
                     to={`/collections/${sub.slug}`}
-                    className="px-4 py-2 border border-gray-200 text-xs font-semibold uppercase tracking-wider whitespace-nowrap hover:border-black transition-colors flex items-center gap-1.5"
+                    className={`px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-colors flex items-center gap-1.5 rounded-sm ${
+                      isSubActive
+                        ? 'bg-black text-white shadow-sm'
+                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 hover:text-black'
+                    }`}
                   >
                     <span>{sub.name}</span>
-                    <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5">
-                      {productCount}
+                    <span
+                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isSubActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-neutral-200 text-neutral-600'
+                      }`}
+                    >
+                      {subProductCount}
                     </span>
                   </Link>
                 );
@@ -326,98 +471,103 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="w-full px-2 sm:px-4 py-4">
-        {/* Top Controls Bar: Filter Toggle | Product Count | Grid Density Switcher | Sort */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-200 mb-4">
-          <div className="flex items-center gap-3">
-            {/* Filter Toggle Button */}
-            <button
-              onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="flex items-center gap-2 px-4 py-2 border border-black bg-white text-black hover:bg-black hover:text-white transition-colors text-xs font-bold uppercase tracking-wider"
-            >
-              <SlidersHorizontal size={14} />
-              <span>{isFilterOpen ? 'Hide Filters' : 'Filters'}</span>
-              {activeFilterCount > 0 && (
-                <span className="w-4 h-4 bg-black text-white text-[10px] rounded-full flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            <span className="text-xs text-gray-500 font-medium">
-              {filteredProducts.length} items
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 ml-auto">
-            {/* Grid Density Switcher: Default 6-per-row vs 15-per-row Dense Mini Grid */}
-            <div className="flex items-center border border-gray-300 rounded overflow-hidden p-0.5 bg-gray-50">
+      {/* Sticky Top Controls Bar: Mobile Filters Toggle | Item Count | Grid Density | Sort */}
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-gray-200">
+        <div className="w-full px-3 sm:px-6 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left Side: Mobile Filter button + item count */}
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setGridDensity('standard')}
-                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-colors ${
-                  gridDensity === 'standard'
-                    ? 'bg-black text-white'
-                    : 'text-gray-600 hover:text-black'
-                }`}
-                title="Default Grid (6 products per row)"
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 border border-black bg-white text-black hover:bg-black hover:text-white transition-colors text-[11px] font-bold uppercase tracking-wider cursor-pointer"
               >
-                <LayoutGrid size={15} />
-                <span className="hidden md:inline">6 / row</span>
+                <SlidersHorizontal size={13} />
+                <span>Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-black text-white text-[9px] flex items-center justify-center font-bold">
+                    {activeFilterCount}
+                  </span>
+                )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => setGridDensity('dense')}
-                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold transition-colors ${
-                  gridDensity === 'dense'
-                    ? 'bg-black text-white'
-                    : 'text-gray-600 hover:text-black'
-                }`}
-                title="Dense Mini Grid (~15 products per row)"
-              >
-                <Grid3X3 size={15} />
-                <span className="hidden md:inline">15 / row</span>
-              </button>
+              <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-500">
+                {filteredProducts.length} {filteredProducts.length === 1 ? 'item' : 'items'}
+              </span>
             </div>
 
-            {/* Sort Dropdown */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="text-xs font-semibold uppercase tracking-wider border border-gray-300 px-3 py-2 bg-white hover:border-black cursor-pointer"
-            >
-              <option value="featured">Featured</option>
-              <option value="newest">Newest</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-            </select>
+            {/* Right Side: Grid Density Switcher + Sort Dropdown */}
+            <div className="flex items-center gap-2.5 sm:gap-3 ml-auto">
+              {/* Grid Density Toggle: 6 / row vs 15 / row */}
+              <div className="flex items-center border border-gray-300 rounded overflow-hidden p-0.5 bg-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => setGridDensity('standard')}
+                  className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
+                    gridDensity === 'standard'
+                      ? 'bg-black text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-black'
+                  }`}
+                  title="Standard Grid (6 products per row)"
+                >
+                  <LayoutGrid size={13} />
+                  <span className="hidden sm:inline">6 / row</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setGridDensity('dense')}
+                  className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
+                    gridDensity === 'dense'
+                      ? 'bg-black text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-black'
+                  }`}
+                  title="Dense Mini Grid (15 products per row)"
+                >
+                  <Grid3X3 size={13} />
+                  <span className="hidden sm:inline">15 / row</span>
+                </button>
+              </div>
+
+              {/* Sort Dropdown */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="text-[11px] font-bold uppercase tracking-wider border border-gray-300 px-2.5 py-1.5 bg-white hover:border-black cursor-pointer focus:outline-none"
+              >
+                <option value="featured">Featured</option>
+                <option value="best-seller">Best Selling</option>
+                <option value="newest">Newest</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* Content Body: Sidebar Component + Dynamic Grid */}
-        <div className="flex items-start gap-4">
-          {isFilterOpen && (
-            <aside className="w-64 sm:w-72 flex-shrink-0 sticky top-[80px] self-start z-20">
-              <FilterSidebar
-                categories={categories}
-                selectedCategory={filterState.categorySlug || categorySlug}
-                onSelectCategory={(slug) =>
-                  setFilterState((prev) => ({ ...prev, categorySlug: slug }))
-                }
-                availableSizes={availableSizes}
-                availableColors={availableColors}
-                minPossiblePrice={0}
-                maxPossiblePrice={maxPossiblePrice}
-                filters={filterState}
-                onFilterChange={setFilterState}
-                onReset={handleResetFilters}
-                totalProductsCount={baseCollectionProducts.length}
-                filteredProductsCount={filteredProducts.length}
-              />
-            </aside>
-          )}
+      {/* Main Content Area: Left Permanent Sidebar (Desktop) + Right Products Grid */}
+      <div className="w-full px-2 sm:px-6 py-6">
+        <div className="flex items-start gap-6">
+          {/* Permanent Left-Hand Sidebar (Desktop) */}
+          <aside className="hidden lg:block w-60 sm:w-64 flex-shrink-0 sticky top-[60px] self-start z-10 pr-2">
+            <FilterSidebar
+              categories={categories}
+              selectedCategory={filterState.categorySlug || categorySlug}
+              onSelectCategory={(slug) => {
+                navigate(`/collections/${slug}`);
+              }}
+              availableSizes={availableSizes}
+              availableColors={availableColors}
+              minPossiblePrice={0}
+              maxPossiblePrice={maxPossiblePrice}
+              filters={filterState}
+              onFilterChange={setFilterState}
+              onReset={handleResetFilters}
+              totalProductsCount={baseCollectionProducts.length}
+              filteredProductsCount={filteredProducts.length}
+            />
+          </aside>
 
           {/* Products Grid */}
           <div className="flex-1 min-w-0">
@@ -430,27 +580,25 @@ export default function CollectionPage() {
                   ))}
                 </div>
               ) : (
-                /* Standard Grid: 6 cards per row on 2xl screens */
-                <div
-                  className={`grid ${
-                    isFilterOpen
-                      ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                      : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
-                  } gap-[4px]`}
-                >
+                /* Standard Grid: up to 6 cards per row on wide screens */
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-[4px]">
                   {filteredProducts.map((product, i) => (
                     <ProductCard key={product.id} product={product} index={i} fullWidth />
                   ))}
                 </div>
               )
             ) : (
-              <div className="text-center py-20 bg-gray-50 border border-dashed border-gray-200">
-                <p className="text-sm font-bold uppercase tracking-wider text-gray-600 mb-2">
-                  No matching items found
+              <div className="text-center py-24 bg-neutral-50 border border-dashed border-neutral-200 rounded-lg">
+                <p className="text-xs font-bold uppercase tracking-widest text-neutral-600 mb-2">
+                  No matching products found
+                </p>
+                <p className="text-xs text-neutral-400 mb-5">
+                  Try adjusting your filters or availability settings
                 </p>
                 <button
+                  type="button"
                   onClick={handleResetFilters}
-                  className="text-xs font-bold uppercase tracking-widest text-black underline hover:text-gray-600"
+                  className="px-5 py-2.5 bg-black text-white text-[11px] font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors cursor-pointer"
                 >
                   Clear all filters
                 </button>
@@ -459,6 +607,90 @@ export default function CollectionPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Drawer Modal for Filters */}
+      <AnimatePresence>
+        {isMobileFilterOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden flex">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileFilterOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            />
+
+            {/* Slide-over Panel */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'tween', duration: 0.25 }}
+              className="relative mr-auto w-full max-w-xs sm:max-w-sm bg-white h-full shadow-2xl flex flex-col z-50 overflow-hidden"
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-200">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal size={14} />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-black">
+                    Filter Products
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileFilterOpen(false)}
+                  className="p-1 text-neutral-500 hover:text-black cursor-pointer"
+                  aria-label="Close filters"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Drawer Content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                <FilterSidebar
+                  categories={categories}
+                  selectedCategory={filterState.categorySlug || categorySlug}
+                  onSelectCategory={(slug) => {
+                    navigate(`/collections/${slug}`);
+                    setIsMobileFilterOpen(false);
+                  }}
+                  availableSizes={availableSizes}
+                  availableColors={availableColors}
+                  minPossiblePrice={0}
+                  maxPossiblePrice={maxPossiblePrice}
+                  filters={filterState}
+                  onFilterChange={setFilterState}
+                  onReset={handleResetFilters}
+                  totalProductsCount={baseCollectionProducts.length}
+                  filteredProductsCount={filteredProducts.length}
+                  isMobileDrawer={true}
+                  onCloseMobile={() => setIsMobileFilterOpen(false)}
+                />
+              </div>
+
+              {/* Drawer Bottom Actions */}
+              <div className="p-3 border-t border-gray-200 bg-neutral-50 flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="flex-1 py-2 text-xs font-bold uppercase tracking-wider border border-gray-300 bg-white hover:bg-neutral-100 text-neutral-800"
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileFilterOpen(false)}
+                  className="flex-1 py-2 text-xs font-bold uppercase tracking-wider bg-black text-white hover:bg-neutral-800"
+                >
+                  Apply ({filteredProducts.length})
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Quick View Modal */}
       {quickViewProduct && (

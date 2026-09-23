@@ -176,18 +176,29 @@ export default function Navbar() {
                 </Link>
               )}
               
-              {/* Profile Icon */}
-              <Link
-                to={user ? (user.role === 'admin' ? '/admin' : '/dashboard') : '/login'}
-                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors"
-                title={user ? user.name || 'Account' : 'Sign In'}
-              >
-                <User size={19} />
-              </Link>
+              {/* Profile Icon or User Initial Avatar Circle */}
+              {user ? (
+                <Link
+                  to={user.role === 'admin' ? '/admin' : '/dashboard'}
+                  className="w-8 h-8 rounded-full bg-black text-white text-xs font-black tracking-wider uppercase flex items-center justify-center border border-black shadow-sm hover:scale-105 transition-transform"
+                  title={`${user.name || user.email} (${user.role === 'admin' ? 'Admin' : 'My Account'})`}
+                >
+                  {(user.name || user.email || 'U').trim().charAt(0).toUpperCase()}
+                </Link>
+              ) : (
+                <Link
+                  to="/login"
+                  className="p-2.5 hover:bg-gray-100 rounded-full transition-colors"
+                  title="Sign In"
+                >
+                  <User size={19} />
+                </Link>
+              )}
 
               {/* Wishlist Icon */}
               <Link
-                to="/dashboard/wishlist"
+                to={user ? "/dashboard" : "/login"}
+                state={user ? { defaultTab: 'wishlist' } : undefined}
                 className="p-2.5 hover:bg-gray-100 rounded-full transition-colors relative"
                 title="Wishlist"
               >

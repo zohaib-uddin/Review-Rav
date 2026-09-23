@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { frontendToast } from '../utils/notifications';
 import {
   Heart,
   ShoppingBag,
@@ -31,7 +33,8 @@ import ProductCard from '../components/ProductCard';
 export default function ProductDetail() {
   const { productSlug, id } = useParams();
   const navigate = useNavigate();
-  const { products, wishlist, toggleWishlist, reviews, fetchProducts } = useStore();
+  const location = useLocation();
+  const { products, wishlist, toggleWishlist, reviews, fetchProducts, user } = useStore();
   const { addToCart: addToCartWithAnimation } = useCart();
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
@@ -588,7 +591,19 @@ export default function ProductDetail() {
 
                 <button
                   type="button"
-                  onClick={() => toggleWishlist(product.id)}
+                  onClick={() => {
+                    if (!user) {
+                      toast.error('Please sign in to add items to your wishlist.');
+                      navigate(`/login?redirect=${encodeURIComponent(location.pathname)}`);
+                      return;
+                    }
+                    toggleWishlist(product.id);
+                    if (!isWishlisted) {
+                      frontendToast.addToWishlist(product.name);
+                    } else {
+                      frontendToast.removeFromWishlist(product.name);
+                    }
+                  }}
                   className={`p-3.5 border transition-all flex items-center justify-center ${
                     isWishlisted
                       ? 'border-red-500 text-red-500 bg-red-50'

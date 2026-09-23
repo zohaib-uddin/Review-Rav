@@ -4,10 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CheckCircle, CreditCard, Truck, Mail, Tag, ShoppingBag, 
   ShieldCheck, ArrowLeft, Clock, Lock, Building, MapPin, 
-  Phone, User, AlertCircle 
+  Phone, User, AlertCircle, Gift, Sparkles 
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { api } from '../services/api';
+import { frontendToast } from '../utils/notifications';
+import { calculateCartDiscounts } from '../utils/cartDiscounts';
+import { resolveColorHex } from '../utils/colorUtils';
 
 const PAKISTAN_PROVINCES = [
   'Punjab',
@@ -70,6 +73,7 @@ export default function Checkout() {
     province: 'Punjab',
     postalCode: ''
   });
+  const [saveAddressToAccount, setSaveAddressToAccount] = useState(true);
   
   // Step 3: Payment
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'bank' | 'jazzcash' | 'easypaisa'>('cod');
@@ -81,14 +85,32 @@ export default function Checkout() {
   const [couponError, setCouponError] = useState('');
   const [applyingCoupon, setApplyingCoupon] = useState(false);
 
-  // If user is already logged in, skip email verification to Step 2
+  // If user is already logged in, show their email in Step 1, but do NOT skip Step 1
   useEffect(() => {
     if (user && user.email) {
       setEmail(user.email);
       setEmailVerified(true);
-      if (step === 1) {
-        setStep(2);
-      }
+      setShippingDetails(prev => ({
+        ...prev,
+        firstName: prev.firstName || (user.name ? user.name.split(' ')[0] : ''),
+        lastName: prev.lastName || (user.name && user.name.split(' ').length > 1 ? user.name.split(' ').slice(1).join(' ') : ''),
+        phone: prev.phone || user.phone || '',
+      }));
+
+      api.getAddresses(user.id).then(addrs => {
+        if (Array.isArray(addrs) && addrs.length > 0) {
+          const def = addrs.find((a: any) => a.is_default) || addrs[0];
+          setShippingDetails(prev => ({
+            ...prev,
+            address: prev.address || def.address_line_1 || '',
+            apartment: prev.apartment || def.address_line_2 || '',
+            city: def.city || prev.city,
+            province: def.region || prev.province,
+            postalCode: prev.postalCode || def.postal_code || '',
+            phone: prev.phone || def.phone || '',
+          }));
+        }
+      }).catch(() => {});
     }
   }, [user]);
 
@@ -110,10 +132,13 @@ export default function Checkout() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
   
-  // Calculate totals
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.salePrice || item.product.price || item.product.base_price || 0) * item.quantity, 0);
-  const discountedSubtotal = Math.max(0, subtotal - discount);
-  const shipping = discountedSubtotal >= 3000 ? 0 : 200;
+  // Calculate totals and tiered dynamic discounts
+  const cartDiscounts = calculateCartDiscounts(cart);
+  const subtotal = cartDiscounts.subtotal;
+  const autoDiscount = cartDiscounts.autoDiscount; // Flat 10% + Tier 5%/10%
+  const totalCombinedDiscount = autoDiscount + discount; // plus manual coupon discount
+  const discountedSubtotal = Math.max(0, subtotal - totalCombinedDiscount);
+  const shipping = subtotal > 0 && discountedSubtotal >= 3000 ? 0 : (subtotal > 0 ? 200 : 0);
   const total = discountedSubtotal + shipping;
 
   // Send OTP
@@ -181,11 +206,11 @@ export default function Checkout() {
       
       if (response.ok && data.success) {
         setEmailVerified(true);
-        if (data.token) {
+        if (data.token && !user) {
           api.setToken(data.token);
           localStorage.setItem('ravenza_token', data.token);
         }
-        if (data.user) {
+        if (data.user && !user) {
           useStore.setState({ user: data.user });
           localStorage.setItem('ravenza_user', JSON.stringify(data.user));
           if (!shippingDetails.firstName && data.user.name) {
@@ -253,17 +278,19 @@ export default function Checkout() {
       firstName: shippingDetails.firstName,
       lastName: shippingDetails.lastName,
       phone: shippingDetails.phone,
+      email: email.trim(),
       address: shippingDetails.address,
       apartment: shippingDetails.apartment,
       city: finalCity,
       region: shippingDetails.province,
       postalCode: shippingDetails.postalCode,
-      notes: shippingDetails.notes
+      notes: shippingDetails.notes,
+      saveAddress: saveAddressToAccount
     };
 
     const payloadBillingAddress = billingSameAsShipping 
       ? payloadShippingAddress 
-      : billingDetails;
+      : { ...billingDetails, email: email.trim() };
 
     const orderPayload = {
       order_number: `RVZ-${Date.now().toString().slice(-6)}`,
@@ -273,7 +300,7 @@ export default function Checkout() {
       total,
       subtotal,
       shipping_cost: shipping,
-      discount_amount: discount,
+      discount_amount: totalCombinedDiscount,
       coupon_code: couponApplied ? couponCode.trim() : null,
       status: 'pending',
       payment_method: paymentMethod,
@@ -281,6 +308,8 @@ export default function Checkout() {
       billing_address: payloadBillingAddress,
       notes: shippingDetails.notes,
       email: email.trim(),
+      save_address: saveAddressToAccount,
+      saveAddress: saveAddressToAccount,
       created_at: new Date().toISOString()
     };
 
@@ -297,13 +326,26 @@ export default function Checkout() {
       const data = await response.json();
       const confirmedOrder = data.id ? data : orderPayload;
 
+      // Sync phone number to user state immediately so dashboard settings show it
+      if (shippingDetails.phone && user) {
+        const updatedUser = { ...user, phone: shippingDetails.phone };
+        useStore.setState({ user: updatedUser });
+        localStorage.setItem('ravenza_user', JSON.stringify(updatedUser));
+      }
+
       addOrder(confirmedOrder);
       setOrderDetails(confirmedOrder);
       clearCart();
       setOrderPlaced(true);
+      frontendToast.orderPlaced(confirmedOrder.order_number);
     } catch (err) {
       console.error('Failed to submit order to server:', err);
       // Fallback: save to local store
+      if (shippingDetails.phone && user) {
+        const updatedUser = { ...user, phone: shippingDetails.phone };
+        useStore.setState({ user: updatedUser });
+        localStorage.setItem('ravenza_user', JSON.stringify(updatedUser));
+      }
       addOrder(orderPayload as any);
       setOrderDetails(orderPayload);
       clearCart();
@@ -365,16 +407,22 @@ export default function Checkout() {
 
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                to="/orders"
-                className="flex-1 py-3.5 px-6 border border-black text-black text-xs font-bold uppercase tracking-widest hover:bg-zinc-100 transition-colors text-center"
+                to={`/track-order?orderId=${orderDetails.order_number}`}
+                className="flex-1 py-3.5 px-6 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors text-center flex items-center justify-center gap-2"
               >
-                Track In Orders
+                <Truck size={15} /> Track Order
               </Link>
               <Link
-                to="/shop-all"
-                className="flex-1 py-3.5 px-6 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors text-center"
+                to="/dashboard"
+                className="flex-1 py-3.5 px-6 border border-black text-black text-xs font-bold uppercase tracking-widest hover:bg-zinc-100 transition-colors text-center"
               >
-                Continue Shopping
+                My Account
+              </Link>
+              <Link
+                to="/shop"
+                className="flex-1 py-3.5 px-6 border border-gray-200 text-gray-700 text-xs font-bold uppercase tracking-widest hover:bg-zinc-50 transition-colors text-center"
+              >
+                Shop More
               </Link>
             </div>
           </div>
@@ -457,85 +505,203 @@ export default function Checkout() {
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
-                        Email Address <span className="text-red-500">*</span>
-                      </label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                          Email Address <span className="text-red-500">*</span>
+                        </label>
+                        {user && (
+                          <span className="text-[11px] text-gray-500">
+                            Logged in as: <strong className="text-black">{user.email}</strong>
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (otpSent) setOtpSent(false);
+                        }}
                         placeholder="youremail@example.com"
-                        disabled={otpSent}
                         className="w-full px-4 py-3 border border-gray-300 text-sm font-medium focus:border-black outline-none transition-colors bg-white disabled:bg-gray-100"
                       />
                     </div>
 
-                    {!otpSent ? (
-                      <button
-                        type="button"
-                        onClick={handleSendOTP}
-                        disabled={sendingOtp || !email}
-                        className="w-full py-4 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {sendingOtp ? 'Sending Verification Code...' : 'Send Verification Code'}
-                      </button>
-                    ) : (
-                      <div className="space-y-4 pt-2">
-                        <div className="p-3 bg-zinc-50 border border-gray-200 flex items-center justify-between text-xs">
-                          <span className="text-gray-600">Verification code expires in:</span>
-                          <span className="font-mono font-bold text-black flex items-center gap-1">
-                            <Clock size={14} /> {formatCountdown(otpCountdown)}
+                    {/* Case 1: User is logged in and the email matches their logged-in email -> Continue directly without OTP */}
+                    {user && email.trim().toLowerCase() === (user.email || '').trim().toLowerCase() && (
+                      <div className="space-y-4 pt-1">
+                        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2.5">
+                          <CheckCircle size={16} className="text-emerald-600 flex-shrink-0" />
+                          <span>
+                            Logged in with verified email <strong>{user.email}</strong>. No OTP required — click below to continue.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmailVerified(true);
+                            setStep(2);
+                          }}
+                          className="w-full py-4 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+                        >
+                          Continue to Shipping Address
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Case 2: User is logged in, but changed the email to a different email -> Requires OTP verification */}
+                    {user && email.trim().toLowerCase() !== (user.email || '').trim().toLowerCase() && (
+                      <div className="space-y-4 pt-1">
+                        <div className="p-3.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                          <AlertCircle size={16} className="text-amber-600 flex-shrink-0" />
+                          <span>
+                            You changed your checkout email to <strong>{email.trim() || 'a new address'}</strong>. An OTP verification is required to verify this email.
                           </span>
                         </div>
 
-                        {testOtpCode && (
-                          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
-                            <span>Test OTP Code: <strong className="font-mono font-bold tracking-widest text-sm">{testOtpCode}</strong></span>
-                            <button 
-                              type="button" 
-                              onClick={() => setOtp(testOtpCode)} 
-                              className="text-[11px] uppercase font-bold underline hover:text-black"
-                            >
-                              Auto-Fill
-                            </button>
+                        {!otpSent ? (
+                          <button
+                            type="button"
+                            onClick={handleSendOTP}
+                            disabled={sendingOtp || !email || !email.includes('@')}
+                            className="w-full py-4 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            {sendingOtp ? 'Sending Verification Code...' : 'Send Verification Code to New Email'}
+                          </button>
+                        ) : (
+                          <div className="space-y-4 pt-2">
+                            <div className="p-3 bg-zinc-50 border border-gray-200 flex items-center justify-between text-xs">
+                              <span className="text-gray-600">Verification code expires in:</span>
+                              <span className="font-mono font-bold text-black flex items-center gap-1">
+                                <Clock size={14} /> {formatCountdown(otpCountdown)}
+                              </span>
+                            </div>
+
+                            {testOtpCode && (
+                              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+                                <span>Test OTP Code: <strong className="font-mono font-bold tracking-widest text-sm">{testOtpCode}</strong></span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => setOtp(testOtpCode)} 
+                                  className="text-[11px] uppercase font-bold underline hover:text-black"
+                                >
+                                  Auto-Fill
+                                </button>
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
+                                Enter 6-Digit Code <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={6}
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                                placeholder="000000"
+                                className="w-full px-4 py-3 border border-gray-300 text-center font-mono text-xl tracking-[0.3em] font-bold focus:border-black outline-none transition-colors"
+                              />
+                            </div>
+
+                            <div className="flex gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEmail(user.email);
+                                  setOtpSent(false);
+                                  setOtp('');
+                                  setOtpError('');
+                                }}
+                                className="w-1/3 py-3.5 border border-black text-black text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors"
+                              >
+                                Revert Email
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleVerifyOTP}
+                                disabled={verifyingOtp || otp.length !== 6}
+                                className="w-2/3 py-3.5 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors disabled:bg-gray-300"
+                              >
+                                {verifyingOtp ? 'Verifying...' : 'Verify & Continue'}
+                              </button>
+                            </div>
                           </div>
                         )}
+                      </div>
+                    )}
 
-                        <div>
-                          <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
-                            Enter 6-Digit Code <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            maxLength={6}
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                            placeholder="000000"
-                            className="w-full px-4 py-3 border border-gray-300 text-center font-mono text-xl tracking-[0.3em] font-bold focus:border-black outline-none transition-colors"
-                          />
-                        </div>
-
-                        <div className="flex gap-3">
+                    {/* Case 3: User is not logged in -> Enter email, send OTP, verify OTP (which creates account & logs in) */}
+                    {!user && (
+                      <div className="space-y-4 pt-1">
+                        {!otpSent ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              setOtpSent(false);
-                              setOtp('');
-                              setOtpError('');
-                            }}
-                            className="w-1/3 py-3.5 border border-black text-black text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors"
+                            onClick={handleSendOTP}
+                            disabled={sendingOtp || !email || !email.includes('@')}
+                            className="w-full py-4 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                           >
-                            Change Email
+                            {sendingOtp ? 'Sending Verification Code...' : 'Send Verification Code'}
                           </button>
-                          <button
-                            type="button"
-                            onClick={handleVerifyOTP}
-                            disabled={verifyingOtp || otp.length !== 6}
-                            className="w-2/3 py-3.5 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors disabled:bg-gray-300"
-                          >
-                            {verifyingOtp ? 'Verifying...' : 'Verify & Continue'}
-                          </button>
-                        </div>
+                        ) : (
+                          <div className="space-y-4 pt-2">
+                            <div className="p-3 bg-zinc-50 border border-gray-200 flex items-center justify-between text-xs">
+                              <span className="text-gray-600">Verification code expires in:</span>
+                              <span className="font-mono font-bold text-black flex items-center gap-1">
+                                <Clock size={14} /> {formatCountdown(otpCountdown)}
+                              </span>
+                            </div>
+
+                            {testOtpCode && (
+                              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+                                <span>Test OTP Code: <strong className="font-mono font-bold tracking-widest text-sm">{testOtpCode}</strong></span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => setOtp(testOtpCode)} 
+                                  className="text-[11px] uppercase font-bold underline hover:text-black"
+                                >
+                                  Auto-Fill
+                                </button>
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
+                                Enter 6-Digit Code <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={6}
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                                placeholder="000000"
+                                className="w-full px-4 py-3 border border-gray-300 text-center font-mono text-xl tracking-[0.3em] font-bold focus:border-black outline-none transition-colors"
+                              />
+                            </div>
+
+                            <div className="flex gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOtpSent(false);
+                                  setOtp('');
+                                  setOtpError('');
+                                }}
+                                className="w-1/3 py-3.5 border border-black text-black text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors"
+                              >
+                                Change Email
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleVerifyOTP}
+                                disabled={verifyingOtp || otp.length !== 6}
+                                className="w-2/3 py-3.5 bg-black text-white text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-colors disabled:bg-gray-300"
+                              >
+                                {verifyingOtp ? 'Verifying...' : 'Verify & Continue'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -716,6 +882,21 @@ export default function Checkout() {
                         />
                         <span className="text-xs font-bold uppercase tracking-wider text-gray-800">
                           Billing address is same as shipping address
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Save address toggle */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={saveAddressToAccount}
+                          onChange={(e) => setSaveAddressToAccount(e.target.checked)}
+                          className="w-4 h-4 accent-black"
+                        />
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-800">
+                          Save this address to my account for faster future checkout
                         </span>
                       </label>
                     </div>
@@ -912,8 +1093,12 @@ export default function Checkout() {
               {/* Items List */}
               <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto pr-1">
                 {cart.map((item, idx) => {
-                  const itemPrice = item.product.salePrice || item.product.price || item.product.base_price || 0;
+                  const actualPrice = Number(item.product.salePrice || item.product.price || item.product.base_price || 0);
+                  const comparePrice = Number(item.product.compare_at_price || item.product.compare_price || 0);
+                  const hasComparePrice = comparePrice > actualPrice;
                   const itemImg = item.product.images?.[0] || item.product.image || item.product.image_url;
+                  const colorHex = resolveColorHex(item.color, item.product.attributes);
+
                   return (
                     <div key={`${item.product.id}-${item.size}-${item.color}-${idx}`} className="py-3.5 flex items-center gap-3">
                       <div className="relative w-14 h-16 bg-gray-100 flex-shrink-0 border border-gray-200 overflow-hidden">
@@ -926,16 +1111,37 @@ export default function Checkout() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold uppercase tracking-wide text-black truncate">{item.product.name}</p>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">
                           {item.size && <span>Size: <strong className="text-black">{item.size}</strong></span>}
-                          {item.color && <span>• Color: <strong className="text-black">{item.color}</strong></span>}
+                          {item.color && (
+                            <span className="inline-flex items-center gap-1">
+                              • Color:
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full border border-black/20 inline-block flex-shrink-0" 
+                                style={{ backgroundColor: colorHex }}
+                              />
+                              <strong className="text-black normal-case">{item.color}</strong>
+                            </span>
+                          )}
                         </div>
-                        <p className="text-[11px] font-mono text-gray-400 mt-0.5">Qty {item.quantity} × Rs. {itemPrice.toLocaleString()}</p>
+                        <p className="text-[11px] font-mono text-gray-400 mt-0.5">
+                          Qty {item.quantity} × Rs. {actualPrice.toLocaleString()}
+                          {hasComparePrice && (
+                            <span className="line-through text-gray-400 text-[10px] ml-1.5">
+                              Rs. {comparePrice.toLocaleString()}
+                            </span>
+                          )}
+                        </p>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-bold text-black font-mono">
-                          Rs. {(itemPrice * item.quantity).toLocaleString()}
+                        <span className="text-xs font-bold text-black font-mono block">
+                          Rs. {(actualPrice * item.quantity).toLocaleString()}
                         </span>
+                        {hasComparePrice && (
+                          <span className="text-[9px] font-bold text-red-600 block">
+                            {Math.round(((comparePrice - actualPrice) / comparePrice) * 100)}% OFF
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -959,7 +1165,7 @@ export default function Checkout() {
                     type="button"
                     onClick={handleApplyCoupon}
                     disabled={applyingCoupon || !couponCode.trim()}
-                    className="px-4 py-2 bg-black text-white text-xs font-bold uppercase tracking-wider hover:bg-zinc-800 disabled:bg-gray-300"
+                    className="px-4 py-2 bg-black text-white text-xs font-bold uppercase tracking-wider hover:bg-zinc-800 disabled:bg-gray-300 cursor-pointer"
                   >
                     {applyingCoupon ? '...' : 'Apply'}
                   </button>
@@ -983,10 +1189,38 @@ export default function Checkout() {
                   <span>Subtotal</span>
                   <span className="font-mono text-black font-semibold">Rs. {subtotal.toLocaleString()}</span>
                 </div>
+                {/* Flat 10% Discount */}
+                {cartDiscounts.flatDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-600 font-medium">
+                    <span className="flex items-center gap-1">
+                      <Tag size={11} />
+                      Flat 10% Discount
+                    </span>
+                    <span className="font-mono">-Rs. {cartDiscounts.flatDiscount.toLocaleString()}</span>
+                  </div>
+                )}
+                {/* Multi-Buy Tier Discount */}
+                {cartDiscounts.tierPercent > 0 && (
+                  <div className="flex justify-between text-amber-600 font-semibold">
+                    <span className="flex items-center gap-1">
+                      <Gift size={11} />
+                      Multi-Buy Bonus ({cartDiscounts.tierPercent}% OFF)
+                    </span>
+                    <span className="font-mono">-Rs. {cartDiscounts.tierDiscount.toLocaleString()}</span>
+                  </div>
+                )}
+                {/* Coupon Code Discount */}
                 {discount > 0 && (
                   <div className="flex justify-between text-emerald-600 font-medium">
-                    <span>Discount</span>
+                    <span>Coupon Discount</span>
                     <span className="font-mono">-Rs. {discount.toLocaleString()}</span>
+                  </div>
+                )}
+                {/* Total Savings */}
+                {totalCombinedDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-800 font-bold bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                    <span>Total Discount Savings</span>
+                    <span className="font-mono">-Rs. {totalCombinedDiscount.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-gray-600">

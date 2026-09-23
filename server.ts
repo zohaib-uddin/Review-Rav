@@ -4,6 +4,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcryptjs from 'bcryptjs';
+import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
 
 dotenv.config();
@@ -175,6 +176,34 @@ const initialCategories: Category[] = [
     display_order_warm_chapter: 1,
   },
   {
+    id: 'cat-1-1',
+    name: 'Summer Co-Ords',
+    slug: 'summer-co-ords',
+    parent_id: 'cat-1',
+    description: 'Lightweight breathable matching coordinates for warm days',
+    badge: 'SUMMER',
+    tag: 'LIGHTWEIGHT',
+    cover_image_url: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&h=1000&fit=crop',
+    sort_order: 1,
+    is_active: true,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
+  },
+  {
+    id: 'cat-1-2',
+    name: 'Winter Heavyweight Co-Ords',
+    slug: 'winter-heavyweight-co-ords',
+    parent_id: 'cat-1',
+    description: 'Ultra-heavy 380 GSM fleece matching winter sets',
+    badge: 'HOT',
+    tag: 'HEAVYWEIGHT',
+    cover_image_url: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=800&h=1000&fit=crop',
+    sort_order: 2,
+    is_active: true,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
+  },
+  {
     id: 'cat-2',
     name: 'Oversize Tees',
     slug: 'oversize-tees',
@@ -190,6 +219,34 @@ const initialCategories: Category[] = [
     display_order_warm_chapter: 2,
   },
   {
+    id: 'cat-2-1',
+    name: 'Acid Wash Tees',
+    slug: 'acid-wash-tees',
+    parent_id: 'cat-2',
+    description: 'Vintage mineral wash tees with distress tailoring',
+    badge: 'VINTAGE',
+    tag: 'MINERAL WASH',
+    cover_image_url: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=800&h=1000&fit=crop',
+    sort_order: 1,
+    is_active: true,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
+  },
+  {
+    id: 'cat-2-2',
+    name: 'Boxy Graphic Tees',
+    slug: 'boxy-graphic-tees',
+    parent_id: 'cat-2',
+    description: 'Relaxed drop-shoulder tees with brutalist streetwear typography',
+    badge: 'EXCLUSIVE',
+    tag: 'BOXY FIT',
+    cover_image_url: 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&h=1000&fit=crop',
+    sort_order: 2,
+    is_active: true,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
+  },
+  {
     id: 'cat-3',
     name: 'Graphic Trousers',
     slug: 'graphic-trousers',
@@ -203,6 +260,20 @@ const initialCategories: Category[] = [
     display_order_in_focus: 3,
     is_warm_chapter: true,
     display_order_warm_chapter: 3,
+  },
+  {
+    id: 'cat-3-1',
+    name: 'Wide Leg Pants',
+    slug: 'wide-leg-pants',
+    parent_id: 'cat-3',
+    description: 'Wide leg trousers tailored for fluid draped silhouettes',
+    badge: null,
+    tag: 'RELAXED',
+    cover_image_url: 'https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=800&h=1000&fit=crop',
+    sort_order: 1,
+    is_active: true,
+    is_featured_in_focus: false,
+    display_order_in_focus: 0,
   },
   {
     id: 'cat-4',
@@ -261,6 +332,7 @@ const initialProducts: Product[] = [
     base_price: 4500,
     compare_at_price: 3990,
     category_id: 'cat-1',
+    subcategory_id: 'cat-1-1',
     brand: 'RAVENZA',
     fabric: '100% Cotton',
     fabric_composition: '100% Premium Cotton',
@@ -306,6 +378,8 @@ const initialProducts: Product[] = [
     shipping_delivery: '3-5 business days',
     model_size: 'Model wears size M',
     sku: 'RVZ-CO-002',
+    category_id: 'cat-1',
+    subcategory_id: 'cat-1-2',
     is_new_arrival: true,
     is_bestseller: false,
     is_featured: true,
@@ -360,6 +434,7 @@ const initialProducts: Product[] = [
     base_price: 2800,
     compare_at_price: 2499,
     category_id: 'cat-2',
+    subcategory_id: 'cat-2-1',
     brand: 'RAVENZA',
     fabric: 'Acid Wash Cotton',
     fabric_composition: '100% Acid Wash Cotton',
@@ -393,6 +468,7 @@ const initialProducts: Product[] = [
     base_price: 2500,
     compare_at_price: 2240,
     category_id: 'cat-2',
+    subcategory_id: 'cat-2-2',
     brand: 'RAVENZA',
     fabric: 'Cotton Fleece',
     fabric_composition: '100% Cotton Fleece',
@@ -413,8 +489,8 @@ const initialProducts: Product[] = [
       'https://images.unsplash.com/photo-1578681994506-b8f463449011?w=800&h=1000&fit=crop',
     ],
     attributes: { sizes: ['S', 'M', 'L', 'XL', '2XL'], colors: ['Black', 'Grey', 'Navy'] },
-    stock: 40,
-    is_in_stock: true,
+    stock: 0,
+    is_in_stock: false,
     created_at: new Date().toISOString(),
   },
   {
@@ -425,6 +501,7 @@ const initialProducts: Product[] = [
     base_price: 3200,
     compare_at_price: 2890,
     category_id: 'cat-3',
+    subcategory_id: 'cat-3-1',
     brand: 'RAVENZA',
     fabric: 'Premium Twill',
     fabric_composition: '100% Premium Twill Cotton',
@@ -543,6 +620,39 @@ const initialProducts: Product[] = [
     ],
     attributes: { sizes: ['S', 'M', 'L', 'XL', '2XL'], colors: ['Black', 'Brown', 'Light Blue'] },
     stock: 30,
+    is_in_stock: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'prod-10',
+    name: 'Obsidian Minimalist Co-Ord Set',
+    slug: 'obsidian-minimalist-co-ord-set',
+    description: 'Clean monochrome aesthetic co-ord set with tonal branding and boxy fit silhouette.',
+    base_price: 4990,
+    compare_at_price: 4490,
+    category_id: 'cat-1',
+    subcategory_id: 'cat-1-1',
+    brand: 'RAVENZA',
+    fabric: 'Combed Cotton',
+    fabric_composition: '100% Combed Cotton',
+    fabric_finish: 'Peach Finish',
+    fit: 'Boxy',
+    graphic_print: 'Minimalist Tonal Screen Print',
+    garment_specs: '280 GSM',
+    garment_care: 'Machine wash cold',
+    shipping_delivery: '3-5 business days',
+    model_size: 'Model wears size L',
+    sku: 'RVZ-CO-004',
+    is_new_arrival: true,
+    is_bestseller: true,
+    is_featured: true,
+    badge: 'NEW',
+    images: [
+      'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&h=1000&fit=crop',
+      'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
+    ],
+    attributes: { sizes: ['S', 'M', 'L', 'XL'], colors: ['Obsidian Black', 'Charcoal'] },
+    stock: 40,
     is_in_stock: true,
     created_at: new Date().toISOString(),
   },
@@ -946,6 +1056,74 @@ async function syncStoresFromNeon() {
       }));
       console.log(`✅ Loaded ${productsStore.length} products from Neon DB`);
     }
+
+    // Verify & ensure addresses and cart_items tables exist with required columns
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS addresses (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+          type varchar(20) DEFAULT 'shipping',
+          address_line_1 varchar(255) NOT NULL,
+          address_line_2 varchar(255),
+          city varchar(100) NOT NULL,
+          region varchar(100) DEFAULT 'Sindh',
+          postal_code varchar(20),
+          country varchar(100) DEFAULT 'Pakistan',
+          phone varchar(20),
+          is_default boolean DEFAULT false,
+          status varchar(20) DEFAULT 'active',
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`ALTER TABLE addresses ADD COLUMN IF NOT EXISTS status varchar(20) DEFAULT 'active'`;
+      await sql`ALTER TABLE addresses ADD COLUMN IF NOT EXISTS is_default boolean DEFAULT false`;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS cart_items (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+          session_id varchar(255),
+          product_id varchar(255) NOT NULL,
+          variant_id uuid,
+          size varchar(50) NOT NULL DEFAULT 'M',
+          color varchar(50) NOT NULL DEFAULT 'Black',
+          quantity integer NOT NULL DEFAULT 1,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now()
+        )
+      `;
+      await sql`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS color varchar(50) DEFAULT 'Black'`;
+      await sql`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS size varchar(50) DEFAULT 'M'`;
+
+      // Automatically upgrade image & media columns to TEXT so base64 and large media uploads never hit length limits
+      try {
+        await sql`ALTER TABLE categories ALTER COLUMN cover_image_url TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE categories ALTER COLUMN description TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE products ALTER COLUMN image_url TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE products ALTER COLUMN description TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE products ALTER COLUMN specs TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE warm_chapters ALTER COLUMN image_url TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE collections ALTER COLUMN image_url TYPE text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE journal_entries ALTER COLUMN featured_image TYPE text`;
+      } catch (_) {}
+    } catch (tblErr: any) {
+      console.warn('Neon tables check note:', tblErr.message);
+    }
   } catch (err: any) {
     console.error('Initial Neon sync warning:', err.message);
   }
@@ -1063,6 +1241,7 @@ const usersStore: any[] = [
 // Transformation helper for frontend product representation
 function formatProduct(p: any, catMap: Map<string, any>) {
   const category = p.category_id ? catMap.get(p.category_id) : null;
+  const subcategory = p.subcategory_id ? catMap.get(p.subcategory_id) : null;
   const basePrice = Number(p.base_price || p.price) || 0;
   const comparePrice = p.compare_at_price ? Number(p.compare_at_price) : null;
   const images = Array.isArray(p.images)
@@ -1087,8 +1266,12 @@ function formatProduct(p: any, catMap: Map<string, any>) {
     actual_price: basePrice,
     image: firstImage,
     images: images,
+    category_id: p.category_id || category?.id || null,
+    subcategory_id: p.subcategory_id || subcategory?.id || null,
     category_slug: category?.slug || p.category_slug || p.category || 'uncategorized',
     category_name: category?.name || p.category_name || 'Uncategorized',
+    subcategory_slug: subcategory?.slug || p.subcategory_slug || null,
+    subcategory_name: subcategory?.name || p.subcategory_name || null,
     category: category?.slug || p.category_slug || p.category || 'uncategorized',
     sizes: p.attributes?.sizes || ['S', 'M', 'L', 'XL'],
     colors: p.attributes?.colors || ['Black'],
@@ -1136,7 +1319,19 @@ async function startServer() {
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '150mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '150mb' }));
+
+  // Gracefully handle any unexpected oversized payload errors
+  app.use((err: any, req: any, res: any, next: any) => {
+    if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+      return res.status(413).json({
+        message: 'Image payload is too large. Images are automatically compressed by the browser.',
+        error: 'PayloadTooLargeError'
+      });
+    }
+    next(err);
+  });
 
   // Optional authentication token decoder
   const optionalAuth = (req: any, res: any, next: any) => {
@@ -1315,16 +1510,13 @@ async function startServer() {
 
       if (sql) {
         try {
-          let queryStr = `
-            SELECT p.*, c.name as category_name, c.slug as category_slug
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            WHERE p.is_active = true
-          `;
           const rows = await sql`
-            SELECT p.*, c.name as category_name, c.slug as category_slug
+            SELECT p.*, 
+              c.name as category_name, c.slug as category_slug,
+              sc.name as subcategory_name, sc.slug as subcategory_slug
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN categories sc ON p.subcategory_id = sc.id
             WHERE p.is_active = true
             ORDER BY p.created_at DESC
           `;
@@ -1333,13 +1525,46 @@ async function startServer() {
             let result = rows.map((r: any) => formatProduct(r, new Map()));
 
             if (category && category !== 'all') {
-              result = result.filter(
-                (p: any) =>
-                  p.category === category ||
-                  p.category_slug === category ||
-                  p.category_id === category ||
-                  p.category?.toLowerCase() === category.toLowerCase()
+              const targetSlug = String(category).toLowerCase();
+              const matchingCat = categoriesStore.find(
+                (c) => c.slug?.toLowerCase() === targetSlug || c.id === category
               );
+              
+              if (matchingCat) {
+                if (matchingCat.parent_id) {
+                  // It is a subcategory - ONLY return products of this subcategory
+                  result = result.filter(
+                    (p: any) =>
+                      p.subcategory_id === matchingCat.id ||
+                      p.subcategory_slug?.toLowerCase() === targetSlug ||
+                      p.category_id === matchingCat.id ||
+                      p.category_slug?.toLowerCase() === targetSlug
+                  );
+                } else {
+                  // It is a main category - return products of this category + its subcategories
+                  const childSubcatIds = categoriesStore
+                    .filter((c) => c.parent_id === matchingCat.id)
+                    .map((c) => c.id);
+                  const childSubcatSlugs = categoriesStore
+                    .filter((c) => c.parent_id === matchingCat.id)
+                    .map((c) => c.slug.toLowerCase());
+
+                  result = result.filter(
+                    (p: any) =>
+                      p.category_id === matchingCat.id ||
+                      p.category_slug?.toLowerCase() === targetSlug ||
+                      (p.subcategory_id && childSubcatIds.includes(p.subcategory_id)) ||
+                      (p.subcategory_slug && childSubcatSlugs.includes(p.subcategory_slug.toLowerCase()))
+                  );
+                }
+              } else {
+                result = result.filter(
+                  (p: any) =>
+                    p.category?.toLowerCase() === targetSlug ||
+                    p.category_slug?.toLowerCase() === targetSlug ||
+                    p.subcategory_slug?.toLowerCase() === targetSlug
+                );
+              }
             }
 
             if (search) {
@@ -1370,9 +1595,30 @@ async function startServer() {
       let result = productsStore.filter((p) => p.is_active !== false);
 
       if (category && category !== 'all') {
-        const matchingCat = categoriesStore.find((c) => c.slug === category);
+        const targetSlug = String(category).toLowerCase();
+        const matchingCat = categoriesStore.find(
+          (c) => c.slug?.toLowerCase() === targetSlug || c.id === category
+        );
         if (matchingCat) {
-          result = result.filter((p) => p.category_id === matchingCat.id);
+          if (matchingCat.parent_id) {
+            // Subcategory: ONLY products assigned to this subcategory
+            result = result.filter(
+              (p) =>
+                p.subcategory_id === matchingCat.id ||
+                p.category_id === matchingCat.id
+            );
+          } else {
+            // Main category: products of this main category + all child subcategories
+            const childSubcatIds = categoriesStore
+              .filter((c) => c.parent_id === matchingCat.id)
+              .map((c) => c.id);
+
+            result = result.filter(
+              (p) =>
+                p.category_id === matchingCat.id ||
+                (p.subcategory_id && childSubcatIds.includes(p.subcategory_id))
+            );
+          }
         }
       }
 
@@ -1511,6 +1757,20 @@ async function startServer() {
       return res.status(404).json({ message: 'Product not found' });
     } catch (err: any) {
       res.status(500).json({ message: 'Error fetching product', error: err.message });
+    }
+  });
+
+  // Direct file upload endpoint for base64 / data URL
+  app.post('/api/upload', (req, res) => {
+    try {
+      const { data, image } = req.body;
+      const fileData = data || image;
+      if (!fileData) {
+        return res.status(400).json({ message: 'No file data received' });
+      }
+      return res.json({ url: fileData, message: 'Image uploaded successfully' });
+    } catch (err: any) {
+      return res.status(500).json({ message: 'Upload failed', error: err.message });
     }
   });
 
@@ -2177,34 +2437,61 @@ async function startServer() {
   // ==================== ORDERS ROUTES ====================
   app.get('/api/orders', optionalAuth, async (req, res) => {
     try {
-      const requestedUserId = req.query.user_id as string;
-      const targetUserId = req.user && req.user.role === 'customer' ? req.user.id : (requestedUserId || null);
+      const isAdmin = req.user?.role === 'admin';
+      const requestedUserId = (req.query.user_id as string)?.trim();
+      const requestedEmail = (req.query.email as string)?.trim().toLowerCase();
+      
+      const targetUserId = requestedUserId || (req.user && !isAdmin ? req.user.id : null);
+      const targetEmail = requestedEmail || (req.user && !isAdmin ? (req.user.email || '').toLowerCase().trim() : null);
+
       if (sql) {
         try {
-          let rows;
-          if (targetUserId) {
-            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId);
-            if (isUuid) {
-              rows = await sql`SELECT * FROM orders WHERE user_id = ${targetUserId} ORDER BY created_at DESC`;
+          let rows: any[] = [];
+          if (targetUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
+            if (targetEmail) {
+              rows = await sql`
+                SELECT * FROM orders 
+                WHERE user_id = ${targetUserId} OR LOWER(shipping_address->>'email') = ${targetEmail}
+                ORDER BY created_at DESC
+              `;
             } else {
-              rows = await sql`SELECT * FROM orders ORDER BY created_at DESC`;
+              rows = await sql`
+                SELECT * FROM orders 
+                WHERE user_id = ${targetUserId}
+                ORDER BY created_at DESC
+              `;
             }
-          } else {
+          } else if (targetEmail) {
+            rows = await sql`
+              SELECT * FROM orders 
+              WHERE LOWER(shipping_address->>'email') = ${targetEmail}
+              ORDER BY created_at DESC
+            `;
+          } else if (isAdmin) {
             rows = await sql`SELECT * FROM orders ORDER BY created_at DESC`;
+          } else {
+            // Unauthenticated or non-admin with no user ID/email -> RETURN EMPTY ARRAY to prevent leakage
+            return res.json([]);
           }
-          if (rows && rows.length > 0) {
+
+          if (rows) {
             return res.json(rows.map((r: any) => ({
               id: r.id,
               order_number: r.order_number,
               tracking_id: r.tracking_number || `TRK-${r.order_number}`,
+              tracking_number: r.tracking_number || `TRK-${r.order_number}`,
               user_id: r.user_id,
               total: Number(r.total),
               subtotal: Number(r.subtotal),
               shipping_cost: Number(r.shipping_cost),
               discount_amount: Number(r.discount_amount || 0),
+              discount_code: r.discount_code,
               status: r.status,
+              payment_status: r.payment_status || 'unpaid',
               payment_method: r.payment_method,
               shipping_address: r.shipping_address,
+              billing_address: r.billing_address,
+              order_notes: r.order_notes,
               items: r.items,
               date: r.created_at,
               created_at: r.created_at,
@@ -2214,33 +2501,322 @@ async function startServer() {
           console.error('Neon get orders error:', e);
         }
       }
+
+      // Memory store fallback with strict user check
       if (targetUserId) {
-        return res.json(ordersStore.filter((o) => o.user_id === targetUserId));
+        return res.json(ordersStore.filter((o) => o.user_id === targetUserId || (targetEmail && o.shipping_address?.email?.toLowerCase() === targetEmail)));
+      } else if (targetEmail) {
+        return res.json(ordersStore.filter((o) => o.shipping_address?.email?.toLowerCase() === targetEmail));
+      } else if (isAdmin) {
+        return res.json(ordersStore);
       }
-      res.json(ordersStore);
+      return res.json([]);
     } catch (err: any) {
       res.status(500).json({ message: 'Error retrieving orders', error: err.message });
     }
   });
+
+  // Track Order endpoint with strict ownership verification
+  app.get('/api/orders/track/:orderNumber', optionalAuth, async (req, res) => {
+    try {
+      const { orderNumber } = req.params;
+      const cleanNum = (orderNumber || '').trim();
+      const currentUserId = req.user?.id || (req.query.user_id as string);
+      const currentUserEmail = (req.user?.email || (req.query.email as string) || '').toLowerCase().trim();
+
+      if (!currentUserId && !currentUserEmail && req.user?.role !== 'admin') {
+        return res.status(401).json({ 
+          message: 'Authentication required. Please sign in to your account first to track this order.' 
+        });
+      }
+
+      let order: any = null;
+      if (sql) {
+        try {
+          const rows = await sql`
+            SELECT * FROM orders 
+            WHERE (order_number = ${cleanNum} OR tracking_number = ${cleanNum} OR id::text = ${cleanNum})
+            LIMIT 1
+          `;
+          if (rows && rows.length > 0) {
+            order = rows[0];
+          }
+        } catch (e) {
+          console.error('Neon track order query error:', e);
+        }
+      }
+
+      if (!order) {
+        order = ordersStore.find(o => o.order_number === cleanNum || o.tracking_id === cleanNum || o.id === cleanNum);
+      }
+
+      if (!order) {
+        return res.status(404).json({ message: `Order #${cleanNum} not found in our records.` });
+      }
+
+      // Security Check: Verify order belongs to this customer
+      const orderUserId = order.user_id;
+      const orderEmail = (order.shipping_address?.email || '').toLowerCase().trim();
+
+      const isOwner = (currentUserId && orderUserId && orderUserId === currentUserId) ||
+                      (currentUserEmail && orderEmail && currentUserEmail === orderEmail) ||
+                      (req.user?.role === 'admin');
+
+      if (!isOwner) {
+        return res.status(403).json({
+          message: 'Access denied. This order belongs to a different customer account. Please ensure you are logged in with the matching account.'
+        });
+      }
+
+      res.json({
+        id: order.id,
+        order_number: order.order_number,
+        tracking_number: order.tracking_number || order.tracking_id || `TRK${order.order_number.replace(/\D/g, '')}`,
+        status: order.status || 'processing',
+        payment_status: order.payment_status || 'unpaid',
+        payment_method: order.payment_method || 'cod',
+        subtotal: Number(order.subtotal || 0),
+        shipping_cost: Number(order.shipping_cost || 0),
+        discount_amount: Number(order.discount_amount || 0),
+        discount_code: order.discount_code,
+        total: Number(order.total || 0),
+        shipping_address: order.shipping_address,
+        billing_address: order.billing_address,
+        order_notes: order.order_notes,
+        items: order.items,
+        date: order.created_at || order.date,
+        created_at: order.created_at || order.date,
+        carrier: 'Trax Logistics / TCS Express',
+        estimated_delivery: '3-4 Business Days',
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: 'Error tracking order', error: err.message });
+    }
+  });
+
+  // Generate deterministic secure access token for unauthenticated order detail viewing via email links
+  function generateOrderAccessToken(orderNum: string, email: string, orderId?: string): string {
+    const cleanNum = (orderNum || '').trim();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanId = (orderId || '').trim();
+    return crypto.createHmac('sha256', JWT_SECRET).update(`${cleanNum}:${cleanEmail}:${cleanId}`).digest('hex').substring(0, 32);
+  }
+
+  // Public/tokenized order detail endpoint for unauthenticated customers clicking email links or authenticated owners
+  app.get('/api/orders/public-details/:orderId', optionalAuth, async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { token } = req.query as { token?: string };
+      const cleanKey = (orderId || '').trim();
+
+      let order: any = null;
+      if (sql) {
+        try {
+          const rows = await sql`
+            SELECT * FROM orders 
+            WHERE (id::text = ${cleanKey} OR order_number = ${cleanKey} OR tracking_number = ${cleanKey})
+            LIMIT 1
+          `;
+          if (rows && rows.length > 0) {
+            order = rows[0];
+          }
+        } catch (e) {
+          console.error('Neon public order lookup error:', e);
+        }
+      }
+
+      if (!order) {
+        order = ordersStore.find(o => o.id === cleanKey || o.order_number === cleanKey || o.tracking_id === cleanKey);
+      }
+
+      if (!order) {
+        return res.status(404).json({ message: 'Order not found in our records.' });
+      }
+
+      const orderEmail = (order.email || order.shipping_address?.email || '').toLowerCase().trim();
+      const orderUserId = order.user_id;
+
+      // Check authorization:
+      // 1. Authenticated user matching user_id or email, or admin
+      const isOwnerOrAdmin = (req.user?.id && orderUserId && req.user.id === orderUserId) ||
+                             (req.user?.email && orderEmail && req.user.email.toLowerCase() === orderEmail) ||
+                             (req.user?.role === 'admin');
+
+      // 2. Token match for unauthenticated access via email link
+      let isValidToken = false;
+      if (token) {
+        const expectedToken1 = generateOrderAccessToken(order.order_number, orderEmail, order.id);
+        const expectedToken2 = generateOrderAccessToken(order.order_number, orderEmail, '');
+        if (token === expectedToken1 || token === expectedToken2) {
+          isValidToken = true;
+        }
+      }
+
+      if (!isOwnerOrAdmin && !isValidToken) {
+        return res.status(403).json({ 
+          message: 'Access restricted. Please sign in to your account or access this order via the secure link sent to your confirmation email.' 
+        });
+      }
+
+      const shippingAddress = order.shipping_address || {};
+      const billingAddress = order.billing_address || shippingAddress;
+
+      res.json({
+        id: order.id,
+        order_number: order.order_number,
+        tracking_number: order.tracking_number || order.tracking_id || `TRK${order.order_number.replace(/\D/g, '')}`,
+        user_id: order.user_id,
+        status: order.status || 'confirmed',
+        payment_status: order.payment_status || (order.payment_method === 'cod' ? 'unpaid' : 'paid'),
+        payment_method: order.payment_method || 'Cash on Delivery',
+        subtotal: Number(order.subtotal || 0),
+        shipping_cost: Number(order.shipping_cost || 0),
+        discount_amount: Number(order.discount_amount || 0),
+        discount_code: order.discount_code || order.coupon_code || null,
+        coupon_code: order.discount_code || order.coupon_code || null,
+        total: Number(order.total || 0),
+        shipping_address: shippingAddress,
+        billing_address: billingAddress,
+        order_notes: order.order_notes || order.notes || '',
+        items: order.items || [],
+        email: orderEmail,
+        date: order.created_at || order.date,
+        created_at: order.created_at || order.date,
+        access_token: generateOrderAccessToken(order.order_number, orderEmail, order.id)
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: 'Error retrieving order details', error: err.message });
+    }
+  });
+
+  // Helper to send order confirmation email via Google Apps Script webhook
+  async function sendOrderConfirmationEmail(orderData: any) {
+    const webhookUrl = process.env.APPS_SCRIPT_ORDER_WEBHOOK || process.env.ORDER_CONFIRMATION_WEBHOOK_URL;
+    const shippingAddress = orderData.shipping_address || orderData.shippingDetails || {};
+    const targetEmail = (orderData.email || shippingAddress.email || '').toLowerCase().trim();
+
+    if (!targetEmail) {
+      console.log('⚠️ [ORDER CONFIRMATION] No target email specified for order:', orderData.order_number);
+      return { success: false, message: 'No target email' };
+    }
+
+    const items = (orderData.items || []).map((item: any) => {
+      const prod = item.product || item;
+      return {
+        name: prod.name || item.name || item.product_name || 'Ravenza Garment',
+        size: item.size || 'M',
+        color: item.color || item.selectedColor || 'Black',
+        quantity: Number(item.quantity) || 1,
+        price: Number(prod.salePrice || prod.price || item.unit_price || item.price || 0),
+        image: prod.image || (prod.images && prod.images[0]) || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=200',
+      };
+    });
+
+    // Generate secure order access token for unauthenticated access from confirmation email link
+    const orderAccessToken = generateOrderAccessToken(orderData.order_number, targetEmail, orderData.id);
+    const userSnippet = (orderData.user_id || 'guest-usr').toString().slice(0, 8);
+    const orderKey = orderData.id || orderData.order_number;
+    
+    // Resolve base application origin URL
+    const appOrigin = (process.env.APP_URL || process.env.VITE_APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    const orderDetailUrl = `${appOrigin}/order-details/${userSnippet}/${orderKey}?token=${orderAccessToken}`;
+    const storeUrl = `${appOrigin}/shop-all`;
+    
+    const placedDateFormatted = new Date(orderData.created_at || orderData.date || Date.now()).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const payload = {
+      email: targetEmail,
+      orderNumber: orderData.order_number,
+      orderId: orderData.id || orderData.order_number,
+      orderAccessToken,
+      orderDetailUrl,
+      storeUrl,
+      placedOnDate: placedDateFormatted,
+      trackingNumber: orderData.tracking_id || orderData.tracking_number || '',
+      customerName: `${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}`.trim() || 'Valued Customer',
+      status: orderData.status || 'Confirmed',
+      total: Number(orderData.total) || 0,
+      subtotal: Number(orderData.subtotal) || 0,
+      shippingCost: Number(orderData.shipping_cost) || 0,
+      discountAmount: Number(orderData.discount_amount) || 0,
+      discountCode: orderData.discount_code || orderData.coupon_code || null,
+      paymentMethod: orderData.payment_method || 'Cash on Delivery',
+      paymentStatus: orderData.payment_status || (orderData.payment_method === 'cod' ? 'Unpaid (COD)' : 'Paid'),
+      shippingAddress: {
+        name: `${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}`.trim(),
+        address: shippingAddress.address || '',
+        apartment: shippingAddress.apartment || '',
+        city: shippingAddress.city || '',
+        region: shippingAddress.region || shippingAddress.province || '',
+        postal_code: shippingAddress.postalCode || '',
+        country: 'Pakistan',
+        phone: shippingAddress.phone || '',
+      },
+      billingAddress: orderData.billing_address || shippingAddress,
+      orderNotes: orderData.order_notes || orderData.notes || '',
+      items,
+    };
+
+    console.log(`📧 [ORDER CONFIRMATION] Dispatching to ${targetEmail} for Order #${orderData.order_number}`);
+
+    if (webhookUrl) {
+      try {
+        const resp = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const resText = await resp.text();
+        console.log(`✅ [ORDER CONFIRMATION] Google Apps Script response:`, resText);
+        return { success: true, dispatched: true, response: resText, payload };
+      } catch (e: any) {
+        console.error(`⚠️ [ORDER CONFIRMATION] Webhook dispatch error:`, e.message);
+        return { success: false, error: e.message, payload };
+      }
+    } else {
+      console.log(`ℹ️ [ORDER CONFIRMATION] Apps Script webhook URL not configured in APPS_SCRIPT_ORDER_WEBHOOK. Logged payload for ${targetEmail}.`);
+      return { success: true, simulated: true, payload };
+    }
+  }
 
   app.post('/api/orders', optionalAuth, async (req, res) => {
     try {
       const orderData = req.body;
       const orderNumber = orderData.order_number || `RVZ-${Math.floor(100000 + Math.random() * 900000)}`;
       const trackingNumber = orderData.tracking_id || orderData.tracking_number || `TRK${Date.now().toString().slice(-8)}`;
-      const rawUserId = req.user?.id || orderData.user_id;
-      const isValidUuid = rawUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawUserId);
-      const dbUserId = isValidUuid ? rawUserId : null;
+      let rawUserId = req.user?.id || orderData.user_id;
+      const shippingAddress = orderData.shipping_address || orderData.shippingDetails || {};
+      const orderEmail = (orderData.email || shippingAddress.email || req.user?.email || '').toLowerCase().trim();
+      shippingAddress.email = orderEmail;
+
+      let dbUserId: string | null = null;
+      if (rawUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawUserId)) {
+        dbUserId = rawUserId;
+      } else if (sql && orderEmail) {
+        try {
+          const userRow = await sql`SELECT id FROM users WHERE LOWER(email) = ${orderEmail} LIMIT 1`;
+          if (userRow && userRow.length > 0) {
+            dbUserId = userRow[0].id;
+          }
+        } catch (uErr) {
+          console.warn('Neon resolve user id error:', uErr);
+        }
+      }
 
       const subtotal = Number(orderData.subtotal) || 0;
       const shippingCost = Number(orderData.shipping_cost) || 0;
       const discountAmount = Number(orderData.discount_amount) || 0;
       const total = Number(orderData.total) || (subtotal - discountAmount + shippingCost);
-      const shippingAddress = orderData.shipping_address || orderData.shippingDetails || {};
       const items = orderData.items || orderData.cart || [];
       const paymentMethod = orderData.payment_method || 'cod';
       const orderNotes = orderData.notes || shippingAddress.notes || '';
       const discountCode = orderData.coupon_code || orderData.discount_code || null;
+      const shouldSaveAddress = Boolean(orderData.save_address || orderData.saveAddress || shippingAddress.saveAddress);
 
       let createdOrderId = orderData.id || `ord-${Date.now()}`;
 
@@ -2262,20 +2838,61 @@ async function startServer() {
             createdOrderId = inserted[0].id;
           }
 
-          if (dbUserId && shippingAddress.address) {
+          // Always sync phone from checkout into users profile
+          if (dbUserId && shippingAddress.phone) {
             try {
               await sql`
-                INSERT INTO addresses (
-                  user_id, type, address_line_1, city, region, postal_code, phone, is_default
-                ) VALUES (
-                  ${dbUserId}, 'shipping', ${shippingAddress.address}, ${shippingAddress.city || ''},
-                  ${shippingAddress.region || 'Punjab'}, ${shippingAddress.postalCode || ''},
-                  ${shippingAddress.phone || ''}, true
-                )
+                UPDATE users 
+                SET phone = ${shippingAddress.phone}, updated_at = NOW()
+                WHERE id = ${dbUserId}
               `;
+              const userInStore = usersStore.find(u => u.id === dbUserId);
+              if (userInStore) {
+                userInStore.phone = shippingAddress.phone;
+              }
+            } catch (pErr) {
+              console.warn('Phone update note:', pErr);
+            }
+          }
+
+          // Always save shipping address into addresses table for authenticated user
+          if (dbUserId && shippingAddress.address) {
+            try {
+              const existing = await sql`
+                SELECT id FROM addresses 
+                WHERE user_id = ${dbUserId} AND address_line_1 = ${shippingAddress.address}
+                LIMIT 1
+              `;
+              if (!existing || existing.length === 0) {
+                const countRows = await sql`SELECT count(*)::int as count FROM addresses WHERE user_id = ${dbUserId}`;
+                const isFirst = countRows && countRows[0]?.count === 0;
+                const makeDefault = isFirst || shouldSaveAddress;
+                if (makeDefault) {
+                  await sql`UPDATE addresses SET is_default = false WHERE user_id = ${dbUserId}`;
+                }
+                await sql`
+                  INSERT INTO addresses (
+                    user_id, type, address_line_1, address_line_2, city, region, postal_code, phone, is_default, status
+                  ) VALUES (
+                    ${dbUserId}, 'shipping', ${shippingAddress.address},
+                    ${shippingAddress.apartment || null},
+                    ${shippingAddress.city || 'Karachi'},
+                    ${shippingAddress.region || shippingAddress.province || 'Sindh'},
+                    ${shippingAddress.postalCode || null},
+                    ${shippingAddress.phone || ''}, ${makeDefault}, 'active'
+                  )
+                `;
+                console.log(`✅ Saved address for user ${dbUserId}`);
+              }
             } catch (addrErr) {
               console.warn('Address insert note:', addrErr);
             }
+          }
+
+          // Clear persistent cart from Neon cart_items table on successful order placement
+          if (dbUserId) {
+            sql`DELETE FROM cart_items WHERE user_id = ${dbUserId}`.catch(() => {});
+            delete userCartsStore[dbUserId];
           }
         } catch (dbErr) {
           console.error('Neon save order error (falling back to memory):', dbErr);
@@ -2287,12 +2904,14 @@ async function startServer() {
         order_number: orderNumber,
         tracking_id: trackingNumber,
         user_id: rawUserId || 'guest',
+        email: orderEmail,
         status: 'pending_verification',
         subtotal,
         shipping_cost: shippingCost,
         total,
         discount_amount: discountAmount,
         discount_code: discountCode,
+        coupon_code: discountCode,
         shipping_address: shippingAddress,
         payment_method: paymentMethod,
         items,
@@ -2302,6 +2921,11 @@ async function startServer() {
       };
 
       ordersStore.unshift(newOrder as any);
+
+      // Trigger automatic confirmation email to the email specified at checkout Step 1
+      sendOrderConfirmationEmail(newOrder).catch((e) => {
+        console.error('Auto order confirmation dispatch error:', e);
+      });
 
       // Decrement inventory dynamically for each ordered item
       if (Array.isArray(items)) {
@@ -2515,6 +3139,57 @@ async function startServer() {
     return res.json({ status, product_id });
   });
 
+  // ==================== USER PROFILE ROUTES ====================
+  app.patch('/api/users/profile', optionalAuth, async (req, res) => {
+    try {
+      const uid = req.user?.id || req.body.id || req.body.user_id;
+      const { name, phone } = req.body;
+      if (!uid) return res.status(401).json({ message: 'User identification required' });
+
+      let updatedUser: any = null;
+      if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+        try {
+          const rows = await sql`
+            UPDATE users 
+            SET name = COALESCE(${name || null}, name),
+                phone = COALESCE(${phone || null}, phone)
+            WHERE id = ${uid}
+            RETURNING id, email, name, phone, role, is_verified
+          `;
+          if (rows && rows.length > 0) {
+            updatedUser = rows[0];
+          }
+        } catch (e) {
+          console.error('Neon update user profile error:', e);
+        }
+      }
+
+      if (!updatedUser) {
+        const u = usersStore.find((user) => user.id === uid);
+        if (u) {
+          if (name) u.name = name;
+          if (phone) u.phone = phone;
+          updatedUser = {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            phone: u.phone,
+            role: u.role,
+            is_verified: u.is_verified,
+          };
+        }
+      }
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      res.json({ success: true, message: 'Profile updated successfully', user: updatedUser });
+    } catch (err: any) {
+      res.status(500).json({ message: 'Error updating profile', error: err.message });
+    }
+  });
+
   // ==================== ADDRESSES ROUTES ====================
   app.get('/api/addresses', optionalAuth, async (req, res) => {
     try {
@@ -2522,7 +3197,7 @@ async function startServer() {
       if (!uid) return res.json([]);
       if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
         try {
-          const rows = await sql`SELECT * FROM addresses WHERE user_id = ${uid} ORDER BY created_at DESC`;
+          const rows = await sql`SELECT * FROM addresses WHERE user_id = ${uid} ORDER BY is_default DESC, created_at DESC`;
           return res.json(rows);
         } catch (e) {
           console.error('Neon addresses error:', e);
@@ -2537,12 +3212,28 @@ async function startServer() {
   app.post('/api/addresses', optionalAuth, async (req, res) => {
     try {
       const uid = req.user?.id || req.body.user_id;
-      const { address_line_1, city, region, postal_code, phone, type = 'shipping', is_default = true } = req.body;
-      if (sql && uid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+      const {
+        address_line_1,
+        address_line_2,
+        city,
+        region,
+        postal_code,
+        phone,
+        type = 'shipping',
+        is_default = false,
+      } = req.body;
+
+      if (!uid) return res.status(401).json({ message: 'User ID is required' });
+
+      if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
         try {
+          if (is_default) {
+            await sql`UPDATE addresses SET is_default = false WHERE user_id = ${uid}`;
+          }
+
           const rows = await sql`
-            INSERT INTO addresses (user_id, type, address_line_1, city, region, postal_code, phone, is_default)
-            VALUES (${uid}, ${type}, ${address_line_1}, ${city}, ${region || ''}, ${postal_code || ''}, ${phone || ''}, ${is_default})
+            INSERT INTO addresses (user_id, type, address_line_1, address_line_2, city, region, postal_code, phone, is_default)
+            VALUES (${uid}, ${type}, ${address_line_1}, ${address_line_2 || null}, ${city}, ${region || 'Sindh'}, ${postal_code || null}, ${phone || ''}, ${Boolean(is_default)})
             RETURNING *
           `;
           return res.status(201).json(rows[0]);
@@ -2550,28 +3241,226 @@ async function startServer() {
           console.error('Neon insert address error:', e);
         }
       }
-      res.status(201).json({ id: `addr-${Date.now()}`, user_id: uid, address_line_1, city, phone, type });
+      res.status(201).json({ id: `addr-${Date.now()}`, user_id: uid, address_line_1, city, phone, type, is_default });
     } catch (err: any) {
       res.status(500).json({ message: 'Error creating address', error: err.message });
+    }
+  });
+
+  app.put('/api/addresses/:id', optionalAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const uid = req.user?.id || req.body.user_id;
+      const {
+        address_line_1,
+        address_line_2,
+        city,
+        region,
+        postal_code,
+        phone,
+        is_default,
+      } = req.body;
+
+      if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        try {
+          if (is_default && uid) {
+            await sql`UPDATE addresses SET is_default = false WHERE user_id = ${uid}`;
+          }
+
+          const rows = await sql`
+            UPDATE addresses
+            SET address_line_1 = COALESCE(${address_line_1 || null}, address_line_1),
+                address_line_2 = COALESCE(${address_line_2 || null}, address_line_2),
+                city = COALESCE(${city || null}, city),
+                region = COALESCE(${region || null}, region),
+                postal_code = COALESCE(${postal_code || null}, postal_code),
+                phone = COALESCE(${phone || null}, phone),
+                is_default = COALESCE(${is_default !== undefined ? Boolean(is_default) : null}, is_default)
+            WHERE id = ${id}
+            RETURNING *
+          `;
+          if (rows && rows.length > 0) {
+            return res.json(rows[0]);
+          }
+        } catch (e) {
+          console.error('Neon update address error:', e);
+        }
+      }
+      res.json({ success: true, id, message: 'Address updated' });
+    } catch (err: any) {
+      res.status(500).json({ message: 'Error updating address', error: err.message });
+    }
+  });
+
+  app.delete('/api/addresses/:id', optionalAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        try {
+          await sql`DELETE FROM addresses WHERE id = ${id}`;
+          return res.json({ success: true, message: 'Address deleted' });
+        } catch (e) {
+          console.error('Neon delete address error:', e);
+        }
+      }
+      res.json({ success: true, message: 'Address deleted' });
+    } catch (err: any) {
+      res.status(500).json({ message: 'Error deleting address', error: err.message });
     }
   });
 
   // ==================== CART ROUTES (Persistence & Sync) ====================
   const userCartsStore: { [userId: string]: any[] } = {};
 
-  app.get('/api/cart/:userId', optionalAuth, (req, res) => {
+  app.get('/api/cart/:userId', optionalAuth, async (req, res) => {
     const { userId } = req.params;
+    if (!userId) return res.json([]);
+
+    if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      try {
+        const rows = await sql`
+          SELECT ci.*, 
+                 p.name as prod_name, p.slug as prod_slug, p.base_price, p.compare_at_price,
+                 p.images, p.image_url, p.attributes, p.variants_matrix
+          FROM cart_items ci
+          LEFT JOIN products p ON (ci.product_id = p.id::text OR ci.product_id = p.slug)
+          WHERE ci.user_id = ${userId}
+          ORDER BY ci.created_at ASC
+        `;
+        if (rows && rows.length > 0) {
+          const catMap = new Map(categoriesStore.map((c) => [c.id, c]));
+          const formattedCart = rows.map((r: any) => {
+            let prodObj = productsStore.find(p => p.id === r.product_id || p.slug === r.product_id);
+            if (!prodObj && r.prod_name) {
+              prodObj = formatProduct({
+                id: r.product_id,
+                name: r.prod_name,
+                slug: r.prod_slug,
+                base_price: r.base_price,
+                compare_at_price: r.compare_at_price,
+                images: r.images,
+                image_url: r.image_url,
+                attributes: r.attributes,
+                variants_matrix: r.variants_matrix,
+              }, catMap);
+            } else if (prodObj) {
+              prodObj = formatProduct(prodObj, catMap);
+            } else {
+              prodObj = {
+                id: r.product_id,
+                name: 'Ravenza Garment',
+                slug: r.product_id,
+                price: 2990,
+                image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=200',
+              } as any;
+            }
+            return {
+              product: prodObj,
+              size: r.size || 'M',
+              color: r.color || 'Black',
+              quantity: Number(r.quantity) || 1,
+            };
+          });
+          userCartsStore[userId] = formattedCart;
+          return res.json(formattedCart);
+        }
+        return res.json([]);
+      } catch (e) {
+        console.error('Neon get cart error:', e);
+      }
+    }
+
     const cart = userCartsStore[userId] || [];
     res.json(cart);
   });
 
-  app.post('/api/cart/:userId/sync', optionalAuth, (req, res) => {
+  app.post('/api/cart/:userId/sync', optionalAuth, async (req, res) => {
     const { userId } = req.params;
     const { cart } = req.body;
-    if (Array.isArray(cart)) {
-      userCartsStore[userId] = cart;
+    if (!Array.isArray(cart)) {
+      return res.status(400).json({ message: 'Cart must be an array' });
     }
-    res.json({ success: true, cart: userCartsStore[userId] || [] });
+
+    userCartsStore[userId] = cart;
+
+    if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      try {
+        await sql`DELETE FROM cart_items WHERE user_id = ${userId}`;
+
+        for (const item of cart) {
+          const prodId = item.product?.id || item.productId || item.id;
+          const size = item.size || 'M';
+          const color = item.color || item.selectedColor || 'Black';
+          const qty = Number(item.quantity) || 1;
+          let resolvedProdId = prodId;
+          const foundProd = productsStore.find(p => p.id === prodId || p.slug === prodId);
+          if (foundProd && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(foundProd.id)) {
+            resolvedProdId = foundProd.id;
+          }
+          if (resolvedProdId) {
+            await sql`
+              INSERT INTO cart_items (user_id, product_id, size, color, quantity, updated_at)
+              VALUES (${userId}, ${resolvedProdId}, ${size}, ${color}, ${qty}, NOW())
+            `;
+          }
+        }
+      } catch (e) {
+        console.error('Neon sync cart error:', e);
+      }
+    }
+
+    res.json({ success: true, count: cart.length });
+  });
+
+  // Direct endpoint to trigger/test order confirmation email
+  app.post('/api/send-order-confirmation', async (req, res) => {
+    try {
+      const result = await sendOrderConfirmationEmail(req.body);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/test-order-confirmation', async (req, res) => {
+    try {
+      const email = (req.query.email as string) || 'test@example.com';
+      const mockOrder = {
+        order_number: `RVZ-${Math.floor(100000 + Math.random() * 900000)}`,
+        tracking_id: `TRK${Date.now().toString().slice(-8)}`,
+        email,
+        status: 'confirmed',
+        subtotal: 7980,
+        shipping_cost: 0,
+        discount_amount: 500,
+        discount_code: 'FLAT500',
+        total: 7480,
+        payment_method: 'Cash on Delivery',
+        shipping_address: {
+          firstName: 'Hamza',
+          lastName: 'Tariq',
+          email,
+          phone: '0300 1234567',
+          address: 'Plot 42, Block 5, Clifton',
+          apartment: 'Apt 4B',
+          city: 'Karachi',
+          province: 'Sindh',
+          postalCode: '75600',
+        },
+        items: [
+          {
+            product: { name: 'Shadow Realm Co-Ord Set', price: 3990 },
+            size: 'L',
+            color: 'Black',
+            quantity: 2,
+          }
+        ],
+      };
+      const result = await sendOrderConfirmationEmail(mockOrder);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // ==================== ADMIN STATS ====================
@@ -2830,7 +3719,9 @@ async function startServer() {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    if (email.toLowerCase().trim() === 'admin@ravenza.pk') {
+    const cleanEmail = email.toLowerCase().trim();
+
+    if (cleanEmail === 'admin@ravenza.pk') {
       return res.status(400).json({
         message: 'Admin accounts cannot log in via Customer OTP. Please sign in with Email & Password at the Admin Portal.',
       });
@@ -2838,12 +3729,27 @@ async function startServer() {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiryMs = 15 * 60 * 1000; // 15-minute OTP expiry
-    otpStore[email.toLowerCase()] = {
+    const expiresAt = new Date(Date.now() + expiryMs);
+
+    otpStore[cleanEmail] = {
       otp,
       expiresAt: Date.now() + expiryMs,
     };
 
-    console.log(`📧 Generated 15-min OTP for ${email}: ${otp}`);
+    console.log(`📧 Generated 15-min OTP for ${cleanEmail}: ${otp}`);
+
+    // Persist OTP record in Neon database
+    if (sql) {
+      try {
+        await sql`
+          INSERT INTO otp_verifications (email, otp, otp_code, expires_at, verified)
+          VALUES (${cleanEmail}, ${otp}, ${otp}, ${expiresAt.toISOString()}, false)
+        `;
+        console.log(`💾 Saved OTP in Neon DB for ${cleanEmail}`);
+      } catch (dbOtpErr) {
+        console.warn('Neon save otp_verifications note:', dbOtpErr);
+      }
+    }
 
     // Clean up appsScriptUrl in case of accidental leading/trailing quotes or colon
     let appsScriptUrl = (process.env.APPS_SCRIPT_URL || process.env.GAS_WEBHOOK_URL || process.env.GOOGLE_SCRIPT_URL || '').trim();
@@ -2855,12 +3761,12 @@ async function startServer() {
     let emailSentViaScript = false;
     if (appsScriptUrl && appsScriptUrl.startsWith('http')) {
       try {
-        console.log(`📡 Triggering Google Apps Script webhook for ${email}...`);
+        console.log(`📡 Triggering Google Apps Script webhook for ${cleanEmail}...`);
         const scriptRes = await fetch(appsScriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            email,
+            email: cleanEmail,
             otp,
             appName: 'RAVENZA Streetwear',
             expiryMinutes: 15,
@@ -2869,7 +3775,7 @@ async function startServer() {
         });
         if (scriptRes.ok) {
           emailSentViaScript = true;
-          console.log(`✅ Google Apps Script dispatched OTP email to ${email}`);
+          console.log(`✅ Google Apps Script dispatched OTP email to ${cleanEmail}`);
         } else {
           console.warn(`⚠️ Google Apps Script returned status ${scriptRes.status}`);
         }
@@ -2877,73 +3783,107 @@ async function startServer() {
         console.warn('Apps Script delivery note:', scriptErr);
       }
     } else {
-      console.log(`ℹ️ No APPS_SCRIPT_URL or GAS_WEBHOOK_URL in .env. OTP logged to console: ${otp}`);
+      console.log(`ℹ️ APPS_SCRIPT_URL not configured. OTP available in console: ${otp}`);
     }
 
     res.json({
       success: true,
       message: emailSentViaScript 
-        ? `OTP code sent to ${email}. Valid for 15 minutes.`
-        : `Verification code generated for ${email}. Valid for 15 minutes.`,
-      otp, // Provided for instant checkout validation in preview
+        ? `Verification code sent to ${cleanEmail}. Valid for 15 minutes.`
+        : `Verification code generated for ${cleanEmail}. Valid for 15 minutes.`,
+      otp, // Provided for developer preview
       expiresInMinutes: 15,
     });
   });
 
-  // Alias routes for /api/auth/send-otp and /api/auth/verify-otp
-  app.post('/api/auth/send-otp', (req, res) => {
-    // Forward directly to /api/send-otp handler logic
+  // Alias route
+  app.post('/api/auth/send-otp', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email is required' });
+    const cleanEmail = email.toLowerCase().trim();
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    otpStore[email.toLowerCase()] = { otp, expiresAt: Date.now() + 15 * 60 * 1000 };
-    console.log(`📧 Generated 15-min OTP for ${email}: ${otp}`);
-    res.json({ success: true, message: `OTP code sent to ${email}. Valid for 15 minutes.`, otp });
+    const expiryMs = 15 * 60 * 1000;
+    otpStore[cleanEmail] = { otp, expiresAt: Date.now() + expiryMs };
+
+    if (sql) {
+      try {
+        await sql`
+          INSERT INTO otp_verifications (email, otp, otp_code, expires_at, verified)
+          VALUES (${cleanEmail}, ${otp}, ${otp}, ${new Date(Date.now() + expiryMs).toISOString()}, false)
+        `;
+      } catch (e) {
+        console.warn('Neon save otp note:', e);
+      }
+    }
+
+    console.log(`📧 Generated 15-min OTP for ${cleanEmail}: ${otp}`);
+    res.json({ success: true, message: `OTP code sent to ${cleanEmail}. Valid for 15 minutes.`, otp });
   });
 
-  app.post('/api/auth/verify-otp', async (req, res) => {
-    const { email, otp } = req.body;
-    if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
-    const record = otpStore[email.toLowerCase()];
-    if (!record || record.expiresAt < Date.now()) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
-    }
-    if (record.otp !== otp.trim()) {
-      return res.status(400).json({ success: false, message: 'Incorrect OTP code.' });
-    }
-    delete otpStore[email.toLowerCase()];
-    res.json({ success: true, message: 'OTP verified successfully' });
-  });
-
-  app.post('/api/verify-otp', async (req, res) => {
+  const handleVerifyOtpLogic = async (req: any, res: any) => {
     const { email, otp } = req.body;
     if (!email || !otp) {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
 
-    const record = otpStore[email.toLowerCase()];
-    if (!record || record.expiresAt < Date.now()) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired OTP (expires in 15 minutes)' });
-    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanOtp = String(otp).trim();
 
-    if (record.otp !== otp.trim()) {
-      return res.status(400).json({ success: false, message: 'Incorrect OTP code. Please check and retry.' });
-    }
+    let verified = false;
 
-    delete otpStore[email.toLowerCase()];
-
-    // Auto-login or register customer
-    let userRecord = usersStore.find((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (!userRecord && sql) {
+    // 1. Check Neon database otp_verifications table
+    if (sql) {
       try {
-        const dbUsers = await sql`SELECT * FROM users WHERE LOWER(email) = LOWER(${email}) LIMIT 1`;
+        const rows = await sql`
+          SELECT id FROM otp_verifications 
+          WHERE LOWER(email) = ${cleanEmail}
+            AND (otp = ${cleanOtp} OR otp_code = ${cleanOtp})
+            AND verified = false
+            AND expires_at > NOW()
+          ORDER BY created_at DESC 
+          LIMIT 1
+        `;
+        if (rows && rows.length > 0) {
+          verified = true;
+          await sql`UPDATE otp_verifications SET verified = true WHERE id = ${rows[0].id}`;
+          console.log(`✅ Verified OTP in Neon DB for ${cleanEmail}`);
+        }
+      } catch (dbErr) {
+        console.warn('Neon verify OTP check note:', dbErr);
+      }
+    }
+
+    // 2. Memory store fallback
+    if (!verified) {
+      const record = otpStore[cleanEmail];
+      if (record && record.expiresAt >= Date.now() && record.otp === cleanOtp) {
+        verified = true;
+        delete otpStore[cleanEmail];
+      }
+    }
+
+    if (!verified) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid or expired verification code (codes expire in 15 minutes). Please request a new code.' 
+      });
+    }
+
+    // Auto-login or register customer in Neon DB
+    let userRecord: any = null;
+    if (sql) {
+      try {
+        const dbUsers = await sql`SELECT * FROM users WHERE LOWER(email) = ${cleanEmail} LIMIT 1`;
         if (dbUsers && dbUsers.length > 0) {
           userRecord = {
             id: dbUsers[0].id,
             email: dbUsers[0].email,
-            name: dbUsers[0].name || email.split('@')[0],
+            name: dbUsers[0].name || cleanEmail.split('@')[0],
+            phone: dbUsers[0].phone || '',
             role: dbUsers[0].role || 'customer',
+            is_verified: true,
           };
+          await sql`UPDATE users SET is_verified = true, last_login = NOW() WHERE id = ${dbUsers[0].id}`;
         }
       } catch (e) {
         console.warn('Neon check user error:', e);
@@ -2951,30 +3891,44 @@ async function startServer() {
     }
 
     if (!userRecord) {
+      userRecord = usersStore.find((u) => u.email.toLowerCase() === cleanEmail);
+    }
+
+    if (!userRecord) {
       const newUserId = `usr-${Date.now()}`;
       userRecord = {
         id: newUserId,
-        email: email.toLowerCase(),
-        name: email.split('@')[0],
+        email: cleanEmail,
+        name: cleanEmail.split('@')[0],
+        phone: '',
         role: 'customer',
+        is_verified: true,
       };
-      usersStore.push(userRecord as any);
 
       if (sql) {
         try {
           const insertedUser = await sql`
             INSERT INTO users (email, name, role, is_verified, is_active)
-            VALUES (${email.toLowerCase()}, ${userRecord.name}, 'customer', true, true)
-            ON CONFLICT (email) DO UPDATE SET is_verified = true
-            RETURNING id, email, name, role
+            VALUES (${cleanEmail}, ${userRecord.name}, 'customer', true, true)
+            ON CONFLICT (email) DO UPDATE SET is_verified = true, last_login = NOW()
+            RETURNING id, email, name, phone, role
           `;
           if (insertedUser && insertedUser.length > 0) {
-            userRecord.id = insertedUser[0].id;
+            userRecord = {
+              id: insertedUser[0].id,
+              email: insertedUser[0].email,
+              name: insertedUser[0].name,
+              phone: insertedUser[0].phone || '',
+              role: insertedUser[0].role || 'customer',
+              is_verified: true,
+            };
           }
         } catch (e) {
           console.warn('Neon auto-register user note:', e);
         }
       }
+
+      usersStore.push(userRecord as any);
     }
 
     const token = jwt.sign(
@@ -2989,7 +3943,10 @@ async function startServer() {
       token,
       user: userRecord,
     });
-  });
+  };
+
+  app.post('/api/verify-otp', handleVerifyOtpLogic);
+  app.post('/api/auth/verify-otp', handleVerifyOtpLogic);
 
   // ==================== COUPONS ====================
   app.post('/api/validate-coupon', (req, res) => {

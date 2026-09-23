@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Trash2, Download, Check, X, Plus, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import api from '../../services/api';
+import { adminToast } from '../../utils/notifications';
 
 interface Subscriber {
   id: string;
@@ -29,9 +30,9 @@ export default function AdminNewsletter() {
         method: 'POST',
         body: JSON.stringify({ email })
       });
-      showNotice(`Thanks email successfully sent to ${email}`);
+      adminToast.success('Email Sent', `Thank you email successfully dispatched to ${email}`);
     } catch (err: any) {
-      showNotice(err.message || 'Failed to send thanks email');
+      adminToast.error('Send Failed', err.message || 'Failed to send email');
     } finally {
       setSendingThanksEmail(null);
     }

@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import ProductCard from '../components/ProductCard';
 import MiniProductCard from '../components/MiniProductCard';
 import FilterSidebar, { FilterState } from '../components/collection/FilterSidebar';
+import ShopAllHero from '../components/ShopAllHero';
 
 export default function ShopAllPage() {
   const { products, categories, fetchProducts, fetchCategories } = useStore();
@@ -182,22 +183,8 @@ export default function ShopAllPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <div className="bg-black text-white py-14">
-        <div className="w-full px-4 sm:px-6">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <p className="text-xs font-bold tracking-[0.3em] uppercase text-gray-400 mb-2">
-              COMPLETE DROP CATALOG
-            </p>
-            <h1 className="text-3xl md:text-5xl font-extrabold uppercase tracking-tight">
-              Shop All
-            </h1>
-            <p className="text-gray-400 text-xs tracking-wider uppercase mt-2">
-              {filteredProducts.length} items available
-            </p>
-          </motion.div>
-        </div>
-      </div>
+      {/* Full-width High-Height Carousel Hero Section (No text/badges) */}
+      <ShopAllHero />
 
       {/* Top Bar with Filters Toggle on Left Edge, Grid Density Switcher, and Sorting */}
       <div className="sticky top-0 z-30 bg-white border-b border-gray-200">

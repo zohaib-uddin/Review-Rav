@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { Product, CartItem, useStore } from '../store/useStore';
+import { frontendToast } from '../utils/notifications';
 
 interface CartContextType {
   cart: CartItem[];
@@ -58,21 +59,30 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const triggerFlyAnimation = useCallback((item: AnimationQueueItem) => {
     setIsAnimating(true);
     
-    const triggerEl = item.triggerElement;
-    const cartIcon = document.querySelector('[data-cart-icon]') as HTMLElement;
-    
     // Add item to store immediately
     for (let i = 0; i < item.quantity; i++) {
       storeAddToCart(item.product, item.size, item.color);
     }
 
-    if (!triggerEl || !cartIcon) {
+    // Trigger frontend toast with green tick
+    frontendToast.addToCart(item.product.name);
+
+    let triggerEl = item.triggerElement;
+    if (!triggerEl) {
+      triggerEl = (document.activeElement as HTMLElement) || document.querySelector('[data-atc-btn]') as HTMLElement;
+    }
+
+    const cartIcon = document.querySelector('[data-cart-icon]') as HTMLElement;
+
+    if (!cartIcon) {
       setIsSidebarOpen(true);
       setIsAnimating(false);
       return;
     }
 
-    const triggerRect = triggerEl.getBoundingClientRect();
+    const triggerRect = triggerEl 
+      ? triggerEl.getBoundingClientRect() 
+      : { left: window.innerWidth / 2 - 100, top: window.innerHeight / 2 - 30, width: 200, height: 60 };
     const cartRect = cartIcon.getBoundingClientRect();
 
     // Create flying element with image, title, and price
@@ -83,13 +93,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     flyingElement.style.top = `${triggerRect.top + triggerRect.height / 2}px`;
     flyingElement.style.display = 'flex';
     flyingElement.style.alignItems = 'center';
-    flyingElement.style.gap = '8px';
-    flyingElement.style.padding = '6px 12px 6px 6px';
+    flyingElement.style.gap = '10px';
+    flyingElement.style.padding = '8px 16px 8px 8px';
     flyingElement.style.backgroundColor = '#ffffff';
     flyingElement.style.borderRadius = '9999px';
-    flyingElement.style.border = '1px solid rgba(0,0,0,0.1)';
-    flyingElement.style.zIndex = '99999';
-    flyingElement.style.boxShadow = '0 16px 36px rgba(0,0,0,0.25)';
+    flyingElement.style.border = '1.5px solid rgba(0,0,0,0.15)';
+    flyingElement.style.zIndex = '999999';
+    flyingElement.style.boxShadow = '0 20px 40px rgba(0,0,0,0.3)';
     flyingElement.style.pointerEvents = 'none';
     flyingElement.style.transform = 'translate(-50%, -50%)';
     
@@ -97,10 +107,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const price = item.product.price || item.product.base_price || 0;
 
     flyingElement.innerHTML = `
-      <img src="${imgSrc}" style="width: 44px; height: 44px; object-fit: cover; border-radius: 9999px; flex-shrink: 0;" />
-      <div style="display: flex; flex-direction: column; max-width: 130px; overflow: hidden;">
-        <span style="font-size: 11px; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">${item.product.name}</span>
-        <span style="font-size: 10px; font-weight: 600; color: #666; margin-top: 2px;">Rs.${price.toLocaleString()}</span>
+      <img src="${imgSrc}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 9999px; flex-shrink: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.15);" />
+      <div style="display: flex; flex-direction: column; max-width: 150px; overflow: hidden;">
+        <span style="font-size: 12px; font-weight: 800; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;">${item.product.name}</span>
+        <span style="font-size: 11px; font-weight: 700; color: #16a34a; margin-top: 2px;">Rs. ${price.toLocaleString()}</span>
       </div>
     `;
     
@@ -117,9 +127,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     
     // Control point for bezier - creates an elegant upward floating arc
     const controlX = (startX + endX) / 2;
-    const controlY = Math.min(startY, endY) - 140;
+    const controlY = Math.min(startY, endY) - 160;
 
-    // Animate smoothly using Web Animations API (900ms smooth gentle arc)
+    // Animate gracefully and slowly (1400ms) with smooth arc curve
     const animation = flyingElement.animate([
       { 
         transform: 'translate(-50%, -50%) scale(1) rotate(0deg)',
@@ -127,18 +137,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         offset: 0,
       },
       { 
-        transform: `translate(${controlX - startX}px, ${controlY - startY}px) scale(1.06) rotate(6deg)`,
-        opacity: 0.95,
-        offset: 0.45,
+        transform: `translate(${(controlX - startX) * 0.7}px, ${(controlY - startY) * 0.9}px) scale(1.1) rotate(4deg)`,
+        opacity: 1,
+        offset: 0.35,
       },
       { 
-        transform: `translate(${endX - startX}px, ${endY - startY}px) scale(0.18) rotate(16deg)`,
-        opacity: 0.15,
+        transform: `translate(${controlX - startX}px, ${controlY - startY}px) scale(1.02) rotate(2deg)`,
+        opacity: 0.95,
+        offset: 0.65,
+      },
+      { 
+        transform: `translate(${endX - startX}px, ${endY - startY}px) scale(0.25) rotate(12deg)`,
+        opacity: 0.2,
         offset: 1,
       }
     ], {
-      duration: 900,
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      duration: 1400,
+      easing: 'cubic-bezier(0.25, 0.9, 0.3, 1)',
       fill: 'forwards'
     });
 
@@ -219,8 +234,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeFromCart = useCallback((productId: string, size: string) => {
+    const itemToRemove = cart.find(i => i.product.id === productId && i.size === size);
     storeRemoveFromCart(productId, size);
-  }, [storeRemoveFromCart]);
+    frontendToast.removeFromCart(itemToRemove?.product?.name);
+  }, [cart, storeRemoveFromCart]);
 
   const updateCartQuantity = useCallback((productId: string, size: string, quantity: number) => {
     storeUpdateCartQuantity(productId, size, quantity);

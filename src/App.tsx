@@ -27,6 +27,7 @@ import TrackOrder from './pages/TrackOrder';
 import Contact from './pages/Contact';
 import FAQ from './pages/FAQ';
 import SizeGuide from './pages/SizeGuide';
+import OrderDetail from './pages/OrderDetail';
 import { useStore } from './store/useStore';
 
 /**
@@ -60,6 +61,15 @@ function App() {
     generateManifest();
     registerServiceWorker();
   }, []);
+
+  // When a user logs in or is restored from localStorage, sync their persistent cart, wishlist, and orders
+  useEffect(() => {
+    if (user && user.id) {
+      useStore.getState().fetchCart();
+      useStore.getState().fetchWishlist();
+      useStore.getState().fetchOrders();
+    }
+  }, [user?.id]);
 
   return (
     <Router>
@@ -114,6 +124,11 @@ function App() {
                 </StorefrontLayout>
               } 
             />
+            
+            {/* Dedicated Order Detail Pages (with user snippet, order ID, and tokenized email access) */}
+            <Route path="/order-details/:userSnippet/:orderId" element={<StorefrontLayout><OrderDetail /></StorefrontLayout>} />
+            <Route path="/orders/:userSnippet/:orderId" element={<StorefrontLayout><OrderDetail /></StorefrontLayout>} />
+            <Route path="/order/:orderId" element={<StorefrontLayout><OrderDetail /></StorefrontLayout>} />
             
             {/* Informational Customer Pages */}
             <Route path="/about" element={<StorefrontLayout><About /></StorefrontLayout>} />

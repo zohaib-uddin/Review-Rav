@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Maximize2, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useCart } from '../context/CartContext';
 
@@ -91,6 +91,13 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
   const comparePrice = product.compare_at_price || product.compare_price;
   const salePrice = product.salePrice || (comparePrice && comparePrice > price ? comparePrice : null);
 
+  const isOutOfStock = Boolean(
+    (product.stockCount !== undefined && Number(product.stockCount) <= 0) ||
+    (product.stock !== undefined && Number(product.stock) <= 0) ||
+    product.inStock === false ||
+    product.is_in_stock === false
+  );
+
   return (
     <motion.div
       ref={cardRef}
@@ -159,64 +166,55 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
               </AnimatePresence>
             )}
 
-            {/* Badges with continuous Zoom In / Zoom Out Loop Animation */}
-            <motion.div
-              className="absolute top-3 left-3 z-20 pointer-events-none flex flex-col gap-1.5"
-              animate={{ scale: [1, 1.08, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              {product.is_new_arrival && (
-                <span className="bg-black text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
-                  NEW ARRIVAL
-                </span>
-              )}
-              {product.is_best_seller && !product.is_new_arrival && (
-                <span className="bg-black text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
-                  BEST SELLER
-                </span>
-              )}
-              {product.badge && !product.is_new_arrival && !product.is_best_seller && (
-                <span className="bg-black text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
-                  {product.badge}
-                </span>
-              )}
-              {showDiscountBadge && (
-                <span className="bg-red-600 text-white text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 block shadow-sm">
+            {/* Discount Badge on Top Right Corner with Zoom In/Out Loop Animation */}
+            {discountPercent !== null && discountPercent > 0 && (
+              <motion.div
+                className="absolute top-3 right-3 z-20 pointer-events-none"
+                animate={{ scale: [1, 1.08, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <span className="bg-red-600 text-white text-[10px] font-black tracking-wider uppercase px-2.5 py-1 block shadow-md rounded-xs">
                   {discountPercent}% OFF
                 </span>
-              )}
-            </motion.div>
+              </motion.div>
+            )}
 
-            {/* Quick View Button - Clean Rectangle Badge format (no circular/oracle distortion) */}
+            {/* Quick View Button - Always visible at bottom right, expands left on hover, lifts above size selector */}
             <motion.button
               type="button"
               onClick={handleQuickView}
-              className="absolute top-3 right-3 bg-white text-black flex items-center justify-center overflow-hidden shadow-md z-20 border border-gray-100"
-              initial={{ opacity: 0, width: '32px', height: '32px' }}
-              animate={{ 
-                opacity: isHovered ? 1 : 0,
-                width: quickViewExpanded ? '112px' : '32px',
-                height: '32px',
-              }}
-              transition={{ duration: 0.25 }}
               onMouseEnter={() => setQuickViewExpanded(true)}
               onMouseLeave={() => setQuickViewExpanded(false)}
-              whileTap={{ scale: 0.95 }}
+              className="absolute right-3 bg-white text-black flex items-center shadow-md z-30 border border-gray-300 rounded-full overflow-hidden cursor-pointer"
+              initial={false}
+              animate={{
+                bottom: showSizeSelector ? '74px' : '12px',
+                width: quickViewExpanded ? '114px' : '36px',
+                height: '36px',
+              }}
+              transition={{
+                bottom: { type: 'spring', damping: 22, stiffness: 260 },
+                width: { duration: 0.22, ease: 'easeOut' },
+              }}
               title="Quick View"
+              aria-label="Quick View"
             >
-              <div className="w-[32px] h-[32px] flex items-center justify-center flex-shrink-0">
-                <Maximize2 size={14} />
+              <div className="w-[36px] h-[36px] flex items-center justify-center flex-shrink-0 text-black">
+                <Eye size={16} strokeWidth={2.2} />
               </div>
-              <motion.span 
-                className="text-[10px] font-bold tracking-wider uppercase whitespace-nowrap pr-2.5"
-                initial={{ opacity: 0 }}
-                animate={{ 
-                  opacity: quickViewExpanded ? 1 : 0,
-                }}
-                transition={{ duration: 0.2 }}
-              >
-                Quick View
-              </motion.span>
+              <AnimatePresence>
+                {quickViewExpanded && (
+                  <motion.span
+                    initial={{ opacity: 0, x: 8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 8 }}
+                    transition={{ duration: 0.15 }}
+                    className="text-[10px] font-black tracking-wider uppercase whitespace-nowrap pr-3 text-black select-none"
+                  >
+                    Quick View
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </motion.button>
 
             {/* Size Selector - Slides up from bottom */}
@@ -244,7 +242,7 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
                           e.stopPropagation();
                           setSelectedSize(size);
                         }}
-                        className={`px-2.5 py-1 text-xs font-semibold border transition-all ${
+                        className={`px-2.5 py-1 text-xs font-semibold border transition-all cursor-pointer ${
                           selectedSize === size
                             ? 'border-black bg-black text-white'
                             : 'border-gray-300 bg-white hover:border-black'
@@ -263,40 +261,44 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
         {/* Product Info */}
         <div className="mt-3 px-0">
           <Link to={`/products/${product.slug || product.id}`}>
-            <h3 className="text-sm font-normal text-gray-800 line-clamp-1 hover:text-black transition-colors">
+            <h3 className="text-sm font-bold text-neutral-900 line-clamp-1 hover:text-black tracking-tight leading-snug transition-colors">
               {product.name}
             </h3>
           </Link>
           <div className="flex items-center gap-2 mt-1.5">
-            {salePrice && salePrice > price ? (
-              <>
-                <span className="text-sm font-bold text-black">
-                  Rs.{price.toLocaleString()}
-                </span>
-                <span className="text-xs text-gray-400 line-through">
-                  Rs.{salePrice.toLocaleString()}
-                </span>
-              </>
-            ) : (
-              <span className="text-sm font-bold text-black">
-                Rs.{price.toLocaleString()}
+            <span className="text-sm font-black text-black">
+              Rs. {price.toLocaleString()}
+            </span>
+            {comparePrice && comparePrice > price && (
+              <span className="text-xs text-neutral-400 line-through font-medium">
+                Rs. {comparePrice.toLocaleString()}
               </span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Full-width Add to Cart button right under the price */}
+      {/* Full-width Add to Cart / Sold button right under the price */}
       <div className="mt-3">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.98 }}
-          onClick={handleAddToCart}
-          className="w-full py-2.5 bg-black text-white text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 shadow-sm"
-        >
-          <ShoppingBag size={13} />
-          Add to Cart
-        </motion.button>
+        {isOutOfStock ? (
+          <button
+            type="button"
+            disabled
+            className="w-full py-2.5 bg-neutral-200 text-neutral-500 text-[11px] font-bold tracking-[0.2em] uppercase cursor-not-allowed flex items-center justify-center gap-2 border border-neutral-300 shadow-none"
+          >
+            Sold
+          </button>
+        ) : (
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.98 }}
+            onClick={handleAddToCart}
+            className="w-full py-2.5 bg-black text-white text-[11px] font-bold tracking-[0.2em] uppercase hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+          >
+            <ShoppingBag size={13} />
+            Add to Cart
+          </motion.button>
+        )}
       </div>
 
       {/* Quick View Modal */}
@@ -314,18 +316,15 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
 
 // Quick View Modal Component
 function QuickViewModal({ product, onClose }: { product: any; onClose: () => void }) {
-  const { addToCart } = useStore();
-  const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || '');
+  const { addToCart } = useCart();
+  const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || 'M');
   const firstColor = product.colors?.[0];
   const initialColor = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
   const [selectedColor, setSelectedColor] = useState(initialColor);
 
-  const handleAddToCart = () => {
-    if (!selectedSize) {
-      alert('Please select a size');
-      return;
-    }
-    addToCart(product, selectedSize, selectedColor);
+  const handleAddToCart = (e: React.MouseEvent) => {
+    const sizeToUse = selectedSize || product.sizes?.[0] || 'M';
+    addToCart(product, sizeToUse, selectedColor, 1, e.currentTarget as HTMLElement);
     onClose();
   };
 

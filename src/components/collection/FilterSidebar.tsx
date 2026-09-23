@@ -12,6 +12,7 @@ export interface FilterState {
   isFeatured?: boolean;
   isNewArrival?: boolean;
   inStockOnly?: boolean;
+  availability?: 'all' | 'in_stock' | 'out_of_stock';
   tags: string[];
 }
 
@@ -72,6 +73,7 @@ export default function FilterSidebar({
 }: FilterSidebarProps) {
   const [expandedSections, setExpandedSections] = useState({
     categories: true,
+    availability: true,
     price: true,
     size: true,
     color: true,
@@ -344,7 +346,58 @@ export default function FilterSidebar({
           </div>
         )}
 
-        {/* 2. Highlights / Features (Best Seller, Featured, New Arrival, In Stock) */}
+        {/* Availability Filter: All, In Stock, Out of Stock (Sold) */}
+        <div className="border-b border-gray-100 pb-3">
+          <button
+            type="button"
+            onClick={() => toggleSection('availability' as any)}
+            className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-gray-800 hover:text-black"
+          >
+            <span>Availability</span>
+            {expandedSections.availability ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {expandedSections.availability && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              className="mt-2.5 space-y-1.5"
+            >
+              {[
+                { label: 'All Items', value: 'all' },
+                { label: 'In Stock', value: 'in_stock' },
+                { label: 'Out of Stock / Sold', value: 'out_of_stock' },
+              ].map((opt) => {
+                const currentVal = filters.availability || (filters.inStockOnly ? 'in_stock' : 'all');
+                const isSelected = currentVal === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className="flex items-center justify-between cursor-pointer group text-xs text-gray-700 py-1"
+                  >
+                    <span className={`group-hover:text-black ${isSelected ? 'font-bold text-black' : ''}`}>
+                      {opt.label}
+                    </span>
+                    <input
+                      type="radio"
+                      name="availability_filter"
+                      checked={isSelected}
+                      onChange={() => {
+                        onFilterChange({
+                          ...filters,
+                          availability: opt.value as any,
+                          inStockOnly: opt.value === 'in_stock',
+                        });
+                      }}
+                      className="accent-black h-3.5 w-3.5 cursor-pointer"
+                    />
+                  </label>
+                );
+              })}
+            </motion.div>
+          )}
+        </div>
+
+        {/* 2. Highlights / Features (Best Seller, Featured, New Arrival) */}
         <div className="border-b border-gray-100 pb-4">
           <button
             type="button"
@@ -400,18 +453,6 @@ export default function FilterSidebar({
                   checked={Boolean(filters.isNewArrival)}
                   onChange={(e) =>
                     onFilterChange({ ...filters, isNewArrival: e.target.checked })
-                  }
-                  className="rounded border-gray-300 text-black focus:ring-black h-4 w-4"
-                />
-              </label>
-
-              <label className="flex items-center justify-between cursor-pointer group text-xs text-gray-800">
-                <span className="group-hover:text-black font-medium">In Stock Only</span>
-                <input
-                  type="checkbox"
-                  checked={Boolean(filters.inStockOnly)}
-                  onChange={(e) =>
-                    onFilterChange({ ...filters, inStockOnly: e.target.checked })
                   }
                   className="rounded border-gray-300 text-black focus:ring-black h-4 w-4"
                 />

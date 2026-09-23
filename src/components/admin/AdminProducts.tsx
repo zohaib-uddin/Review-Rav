@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useStore, Product } from '../../store/useStore';
 import api from '../../services/api';
+import { adminToast } from '../../utils/notifications';
 
 interface AdminProductsProps {
   onEditProduct: (product: Product) => void;
@@ -26,6 +27,7 @@ export default function AdminProducts({ onEditProduct, onAddProduct }: AdminProd
     setIsRefreshing(true);
     try {
       await fetchProducts();
+      adminToast.info('Catalog Refreshed', 'Synced latest products.');
     } finally {
       setIsRefreshing(false);
     }
@@ -48,20 +50,26 @@ export default function AdminProducts({ onEditProduct, onAddProduct }: AdminProd
     try {
       updateProduct(product.id, updateData);
       await api.updateProduct(product.id, updateData);
-    } catch (err) {
+      const label = flag === 'is_best_seller' ? 'Best Seller' : flag === 'is_new_arrival' ? 'New Arrival' : 'Featured';
+      adminToast.success('Product Flag Updated', `"${product.name}" marked as ${newValue ? label : 'standard'}.`);
+    } catch (err: any) {
       console.error('Failed to toggle flag:', err);
+      adminToast.error('Flag Update Failed', err.message);
     } finally {
       setTogglingId(null);
     }
   };
 
   const handleDelete = async (id: string) => {
+    const prod = products.find(p => p.id === id);
     try {
       deleteProduct(id);
       await api.deleteProduct(id);
       setDeleteConfirmId(null);
-    } catch (err) {
+      adminToast.success('Product Deleted', `"${prod?.name || 'Product'}" was deleted.`);
+    } catch (err: any) {
       console.error('Failed to delete product:', err);
+      adminToast.error('Delete Failed', err.message);
     }
   };
 

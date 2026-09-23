@@ -15,6 +15,12 @@ export default function MiniProductCard({ product }: MiniProductCardProps) {
   const basePrice = Number(product.base_price || product.price || 0);
   const comparePrice = product.compare_at_price ? Number(product.compare_at_price) : null;
   const destination = `/product/${product.slug || product.id}`;
+  const isOutOfStock = Boolean(
+    (product.stockCount !== undefined && Number(product.stockCount) <= 0) ||
+    (product.stock !== undefined && Number(product.stock) <= 0) ||
+    product.inStock === false ||
+    product.is_in_stock === false
+  );
 
   return (
     <Link
@@ -30,22 +36,21 @@ export default function MiniProductCard({ product }: MiniProductCardProps) {
           loading="lazy"
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        {/* Subtle Tag if New or Sale */}
-        {product.is_new_arrival && (
-          <span className="absolute top-1 left-1 bg-black text-white text-[8px] font-bold px-1 py-0.2 uppercase tracking-tighter">
-            NEW
+        {/* Subtle Discount Tag on Top Right if comparePrice > basePrice */}
+        {isOutOfStock ? (
+          <span className="absolute top-1 left-1 bg-neutral-900 text-white text-[8px] font-bold px-1.5 py-0.5 uppercase tracking-wider">
+            SOLD
           </span>
-        )}
-        {comparePrice && comparePrice > basePrice && (
-          <span className="absolute top-1 right-1 bg-red-600 text-white text-[8px] font-bold px-1 py-0.2">
-            SALE
+        ) : !isOutOfStock && comparePrice && comparePrice > basePrice ? (
+          <span className="absolute top-1 right-1 bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 shadow-xs">
+            {Math.round(((comparePrice - basePrice) / comparePrice) * 100)}% OFF
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* Ultra Compact Info: Truncated Title, Base/Actual Price */}
       <div className="p-1.5 space-y-0.5">
-        <p className="text-[11px] font-medium text-gray-900 truncate leading-tight group-hover:text-black">
+        <p className="text-[11px] font-bold text-gray-900 truncate leading-tight group-hover:text-black">
           {product.name}
         </p>
         <div className="flex items-baseline gap-1">
