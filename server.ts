@@ -1318,20 +1318,25 @@ function formatProduct(p: any, catMap: Map<string, any>) {
 async function startServer() {
   const app = express();
 
-  app.use(cors());
-  app.use(express.json({ limit: '150mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '150mb' }));
+ // server.ts ke shuruwat mein ye middleware update karo
 
-  // Gracefully handle any unexpected oversized payload errors
-  app.use((err: any, req: any, res: any, next: any) => {
-    if (err && (err.type === 'entity.too.large' || err.status === 413)) {
-      return res.status(413).json({
-        message: 'Image payload is too large. Images are automatically compressed by the browser.',
-        error: 'PayloadTooLargeError'
-      });
-    }
-    next(err);
-  });
+app.use(cors());
+// Limit ko 50mb kar do (Base64 strings heavy hote hain)
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Ye error handler sabse neeche hona chahiye, lekin routes se pehle
+app.use((err: any, req: any, res: any, next: any) => {
+  // Check for Payload Too Large specific errors
+  if (err.type === 'entity.too.large' || err.status === 413 || (err.message && err.message.includes('too large'))) {
+    console.warn('⚠️ Payload Too Large detected:', err.message);
+    return res.status(413).json({
+      message: 'Image size is too large. Please try a smaller image or refresh the page.',
+      error: 'PayloadTooLargeError'
+    });
+  }
+  next(err);
+});
 
   // Optional authentication token decoder
   const optionalAuth = (req: any, res: any, next: any) => {

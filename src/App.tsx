@@ -10,6 +10,7 @@ import { ScrollToTop, CookieConsent } from './components/FinalPolish';
 import { registerServiceWorker, generateManifest } from './pwa';
 import { CartProvider } from './context/CartContext';
 import CartSidebar from './components/cart/CartSidebar';
+import WhatsAppButton from './components/WhatsAppButton';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
 import ShopAllPage from './pages/ShopAllPage';
@@ -28,12 +29,15 @@ import Contact from './pages/Contact';
 import FAQ from './pages/FAQ';
 import SizeGuide from './pages/SizeGuide';
 import OrderDetail from './pages/OrderDetail';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
+import RefundPolicy from './pages/RefundPolicy';
 import { useStore } from './store/useStore';
 
 /**
  * Storefront Layout:
  * Wraps customer-facing storefront pages with the main customer Navbar, CartSidebar,
- * AccessibilityWrapper, Storefront Footer, ScrollToTop, and CookieConsent.
+ * AccessibilityWrapper, Storefront Footer, ScrollToTop, CookieConsent, and WhatsApp floating button.
  * Admin pages are completely excluded from this layout.
  */
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
@@ -49,6 +53,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       <Footer />
       <ScrollToTop />
       <CookieConsent />
+      <WhatsAppButton />
     </div>
   );
 }
@@ -76,7 +81,11 @@ function App() {
       <ErrorBoundary>
         <SEO />
         <CartProvider>
-          <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <Toaster 
+            position="top-right" 
+            toastOptions={{ duration: 3000 }} 
+            containerStyle={{ top: '84px', right: '24px' }}
+          />
           <Routes>
             {/* =================================================================
                 ADMIN PORTAL ROUTES
@@ -136,6 +145,9 @@ function App() {
             <Route path="/contact" element={<StorefrontLayout><Contact /></StorefrontLayout>} />
             <Route path="/faq" element={<StorefrontLayout><FAQ /></StorefrontLayout>} />
             <Route path="/size-guide" element={<StorefrontLayout><SizeGuide /></StorefrontLayout>} />
+            <Route path="/privacy-policy" element={<StorefrontLayout><PrivacyPolicy /></StorefrontLayout>} />
+            <Route path="/terms" element={<StorefrontLayout><Terms /></StorefrontLayout>} />
+            <Route path="/refund-policy" element={<StorefrontLayout><RefundPolicy /></StorefrontLayout>} />
           </Routes>
         </CartProvider>
       </ErrorBoundary>
@@ -144,3 +156,4 @@ function App() {
 }
 
 export default App;
+

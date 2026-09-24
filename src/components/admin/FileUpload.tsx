@@ -13,9 +13,8 @@ interface FileUploadProps {
 }
 
 /**
- * Optimizes and resizes any image file (regardless of whether it's 5MB, 20MB, or 50MB)
- * down to crystal clear, high-performance WebP/JPEG format.
- * Prevents 413 Payload Too Large and database string overflows.
+ * Optimizes and resizes any image file down to WebP/JPEG format.
+ * Prevents 413 Payload Too Large errors by compressing before upload.
  */
 async function compressImageFile(
   file: File,
@@ -74,7 +73,8 @@ async function compressImageFile(
 
         resolve(dataUrl);
       } catch (canvasErr) {
-        // Fallback to direct read
+        console.warn('Canvas compression failed, falling back to direct read:', canvasErr);
+        // Fallback to direct read if canvas fails
         const reader = new FileReader();
         reader.onload = (e) => resolve((e.target?.result as string) || '');
         reader.onerror = () => reject(new Error('Failed to read file'));
@@ -114,6 +114,7 @@ export default function FileUpload({
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    
     setIsProcessing(true);
     setProcessingStatus(`Optimizing ${files.length} file${files.length > 1 ? 's' : ''}...`);
 

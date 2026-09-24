@@ -140,13 +140,15 @@ export default function Footer() {
 
           {/* Help Section */}
           <div>
-            <h4 className="font-semibold mb-4 text-sm tracking-wider">HELP</h4>
+            <h4 className="font-semibold mb-4 text-sm tracking-wider">HELP & POLICIES</h4>
             <ul className="space-y-2">
               <li><Link to="/track-order" className="text-gray-500 hover:text-black text-sm transition-colors">Track Order</Link></li>
               <li><Link to="/faq" className="text-gray-500 hover:text-black text-sm transition-colors">FAQ</Link></li>
               <li><Link to="/size-guide" className="text-gray-500 hover:text-black text-sm transition-colors">Size Guide</Link></li>
               <li><Link to="/contact" className="text-gray-500 hover:text-black text-sm transition-colors">Contact Us</Link></li>
-              <li><Link to="/about" className="text-gray-500 hover:text-black text-sm transition-colors">About Us</Link></li>
+              <li><Link to="/privacy-policy" className="text-gray-500 hover:text-black text-sm transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="text-gray-500 hover:text-black text-sm transition-colors">Terms & Conditions</Link></li>
+              <li><Link to="/refund-policy" className="text-gray-500 hover:text-black text-sm transition-colors">Return & Exchange Policy</Link></li>
             </ul>
           </div>
 
