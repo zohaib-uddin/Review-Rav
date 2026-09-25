@@ -6,24 +6,25 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Download, TrendingUp, DollarSign, ShoppingBag, Users, 
-  Calendar, RefreshCw, ArrowUpRight, PackageCheck, Layers, Sparkles
+  RefreshCw, ArrowUpRight, PackageCheck, Layers, Tag,
+  Award, Sparkles, CheckCircle2
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import api from '../../services/api';
 
 const PALETTE = [
   '#18181b', // Zinc 900
-  '#3f3f46', // Zinc 700
-  '#71717a', // Zinc 500
-  '#a1a1aa', // Zinc 400
   '#059669', // Emerald 600
   '#2563eb', // Blue 600
   '#7c3aed', // Violet 600
   '#d97706', // Amber 600
+  '#e11d48', // Rose 600
+  '#0891b2', // Cyan 600
+  '#4f46e5', // Indigo 600
 ];
 
 export default function AnalyticsDashboard() {
-  const { orders, products, fetchOrders, fetchProducts } = useStore();
+  const { orders, products, categories, fetchOrders, fetchProducts, fetchCategories } = useStore();
   const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days' | 'all'>('30days');
   const [distributionTab, setDistributionTab] = useState<'category' | 'product'>('category');
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ export default function AnalyticsDashboard() {
   const loadData = async () => {
     setLoading(true);
     try {
-      await Promise.all([fetchOrders(), fetchProducts()]);
+      await Promise.all([fetchOrders(), fetchProducts(), fetchCategories()]);
       const res = await api.getAnalytics(dateRange);
       if (res && typeof res.totalRevenue === 'number') {
         setServerAnalytics(res);
@@ -48,7 +49,7 @@ export default function AnalyticsDashboard() {
     loadData();
   }, [dateRange]);
 
-  // Compute analytics dynamically as fallback/complement to server analytics
+  // Compute analytics dynamically from server response, or fallback using store
   const computedData = useMemo(() => {
     if (serverAnalytics) {
       return {
@@ -64,7 +65,7 @@ export default function AnalyticsDashboard() {
       };
     }
 
-    // Client-side fallback if server offline
+    // Client-side fallback if server is offline
     const now = new Date();
     const daysLimit = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : dateRange === '90days' ? 90 : 3650;
     const cutoffDate = new Date(now.getTime() - daysLimit * 24 * 60 * 60 * 1000);
@@ -114,65 +115,91 @@ export default function AnalyticsDashboard() {
     }));
 
     // Category and Product breakdown
-    const categoryMap: Record<string, number> = {};
-    const productSalesMap: Record<string, { name: string; sales: number; revenue: number; image?: string; category?: string }> = {};
+    const categoryMap: Record<string, { name: string; revenue: number; units: number; orderIds: Set<string> }> = {};
+    const productSalesMap: Record<string, { id: string; name: string; sales: number; units: number; revenue: number; image?: string; category: string; orderIds: Set<string> }> = {};
+
+    const catLookup = new Map<string, string>();
+    categories.forEach(c => catLookup.set(c.id, c.name));
 
     filteredOrders.forEach(o => {
+      const orderId = String(o.id || o.order_number || Math.random());
       const items = Array.isArray(o.items) ? o.items : [];
+
       items.forEach((item: any) => {
         const qty = Number(item.quantity) || 1;
         const itemPrice = Number(item.price || item.unit_price) || 0;
         const itemTotal = itemPrice * qty;
 
-        const prod = products.find(p => p.id === (item.product_id || item.product?.id || item.id));
-        const cat = prod?.category_name || prod?.category || 'Streetwear';
-        categoryMap[cat] = (categoryMap[cat] || 0) + itemTotal;
+        const prod = products.find(p => p.id === (item.product_id || item.product?.id || item.id) || p.slug === item.slug);
+        
+        let cat = 'Streetwear';
+        if (prod?.category_name) cat = prod.category_name;
+        else if (prod?.category_id && catLookup.has(prod.category_id)) cat = catLookup.get(prod.category_id)!;
+        else if (prod?.category) cat = prod.category;
+        else if (item.category) cat = item.category;
+
+        if (!categoryMap[cat]) {
+          categoryMap[cat] = { name: cat, revenue: 0, units: 0, orderIds: new Set() };
+        }
+        categoryMap[cat].revenue += itemTotal;
+        categoryMap[cat].units += qty;
+        categoryMap[cat].orderIds.add(orderId);
 
         const prodName = item.product?.name || item.name || prod?.name || 'Streetwear Garment';
-        const prodImg = prod?.image || prod?.images?.[0] || item.image || '';
+        const prodImg = prod?.image || prod?.images?.[0] || item.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
 
         if (!productSalesMap[prodName]) {
-          productSalesMap[prodName] = { name: prodName, sales: 0, revenue: 0, image: prodImg, category: cat };
+          productSalesMap[prodName] = { 
+            id: prod?.id || item.product_id || `prod-${Math.random()}`, 
+            name: prodName, 
+            sales: 0, 
+            units: 0,
+            revenue: 0, 
+            image: prodImg, 
+            category: cat,
+            orderIds: new Set() 
+          };
         }
         productSalesMap[prodName].sales += qty;
+        productSalesMap[prodName].units += qty;
         productSalesMap[prodName].revenue += itemTotal;
+        productSalesMap[prodName].orderIds.add(orderId);
       });
     });
 
-    // Fallbacks if empty orders
-    if (Object.keys(categoryMap).length === 0) {
-      products.slice(0, 5).forEach((p, idx) => {
-        const cat = p.category_name || p.category || 'Streetwear';
-        categoryMap[cat] = (categoryMap[cat] || 0) + (p.base_price || 3500) * (5 - idx);
-      });
-    }
-
-    const totalCatRevenue = Object.values(categoryMap).reduce((s, v) => s + v, 0) || 1;
-    const categoryData = Object.entries(categoryMap)
-      .map(([name, value]) => ({
-        name,
-        value,
-        percentage: Math.round((value / totalCatRevenue) * 100),
+    const totalCatRevenue = Object.values(categoryMap).reduce((s, v) => s + v.revenue, 0) || revenue || 1;
+    const categoryData = Object.values(categoryMap)
+      .map(c => ({
+        name: c.name,
+        value: c.revenue,
+        units: c.units,
+        orders_count: c.orderIds.size,
+        percentage: Math.round((c.revenue / totalCatRevenue) * 100),
       }))
       .sort((a, b) => b.value - a.value);
 
-    const productList = Object.values(productSalesMap).sort((a, b) => b.revenue - a.revenue);
-    const finalTopProducts = productList.length > 0 ? productList : products.slice(0, 6).map((p, idx) => ({
-      name: p.name,
-      sales: Math.max(1, 8 - idx),
-      revenue: (p.base_price || 3500) * Math.max(1, 8 - idx),
-      image: p.image || p.images?.[0] || '',
-      category: p.category_name || 'Streetwear',
-    }));
+    const productList = Object.values(productSalesMap).sort((a, b) => b.units !== a.units ? b.units - a.units : b.revenue - a.revenue);
+    const totalProdRev = productList.reduce((s, p) => s + p.revenue, 0) || revenue || 1;
 
-    const totalProdRev = finalTopProducts.reduce((s, p) => s + p.revenue, 0) || 1;
-    const productData = finalTopProducts.map(p => ({
+    const productData = productList.map(p => ({
       name: p.name,
       value: p.revenue,
-      sales: p.sales,
+      sales: p.units,
+      units: p.units,
+      orders_count: p.orderIds.size,
       percentage: Math.round((p.revenue / totalProdRev) * 100),
       image: p.image,
       category: p.category,
+    }));
+
+    const finalTopProducts = productList.slice(0, 8).map(p => ({
+      name: p.name,
+      category: p.category,
+      sales: p.units,
+      units: p.units,
+      revenue: p.revenue,
+      orders_count: p.orderIds.size,
+      image: p.image,
     }));
 
     return {
@@ -184,33 +211,61 @@ export default function AnalyticsDashboard() {
       ordersData,
       categoryData,
       productData,
-      topProducts: finalTopProducts.slice(0, 6),
+      topProducts: finalTopProducts,
     };
-  }, [serverAnalytics, orders, products, dateRange]);
+  }, [serverAnalytics, orders, products, categories, dateRange]);
+
+  const activeDonutData = distributionTab === 'category' ? computedData.categoryData : computedData.productData;
+
+  const totalUnitsInView = useMemo(() => {
+    return activeDonutData.reduce((sum: number, item: any) => sum + (Number(item.units || item.sales) || 0), 0);
+  }, [activeDonutData]);
+
+  const totalRevenueInView = useMemo(() => {
+    return activeDonutData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0);
+  }, [activeDonutData]);
 
   const exportToCSV = () => {
     const csvRows = [
       ['Ravenza Admin Analytics Report', `Date: ${new Date().toISOString()}`],
       ['Date Range Filter', dateRange],
       [''],
-      ['Metric', 'Value'],
-      ['Total Revenue (PKR)', `Rs. ${computedData.revenue}`],
-      ['Total Orders', computedData.orders],
-      ['Active Customers (placed >= 1 order)', computedData.customers],
+      ['KPI Summary', 'Value'],
+      ['Total Order Revenue (PKR)', `Rs. ${computedData.revenue}`],
+      ['Total Orders Placed', computedData.orders],
+      ['Active Buying Customers', computedData.customers],
       ['Average Order Value (AOV)', `Rs. ${computedData.avgOrderValue}`],
       [''],
-      ['Top Performing Products by Order Sales'],
-      ['Rank', 'Product Name', 'Units Sold', 'Revenue (PKR)'],
+      ['Revenue Breakdown by Category'],
+      ['Category Name', 'Units Sold', 'Orders Count', 'Revenue (PKR)', 'Contribution %'],
+      ...computedData.categoryData.map((c: any) => [
+        c.name,
+        c.units || c.sales || 0,
+        c.orders_count || 1,
+        `Rs. ${c.value}`,
+        `${c.percentage || 0}%`
+      ]),
+      [''],
+      ['Revenue Breakdown by Products'],
+      ['Product Name', 'Category', 'Units Sold', 'Orders Count', 'Total Revenue (PKR)', 'Contribution %'],
+      ...computedData.productData.map((p: any) => [
+        p.name,
+        p.category || 'Streetwear',
+        p.units || p.sales || 0,
+        p.orders_count || 1,
+        `Rs. ${p.value}`,
+        `${p.percentage || 0}%`
+      ]),
+      [''],
+      ['Top Performing Products Leaderboard'],
+      ['Rank', 'Product Name', 'Category', 'Total Units Sold', 'Total Revenue Earned (PKR)'],
       ...computedData.topProducts.map((p: any, idx: number) => [
         idx + 1,
         p.name,
-        p.sales,
+        p.category || 'Streetwear',
+        p.units || p.sales || 0,
         `Rs. ${p.revenue}`
       ]),
-      [''],
-      ['Revenue Breakdown by Category'],
-      ['Category Name', 'Revenue (PKR)', 'Contribution %'],
-      ...computedData.categoryData.map((c: any) => [c.name, `Rs. ${c.value}`, `${c.percentage || 0}%`]),
     ];
 
     const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
@@ -222,8 +277,6 @@ export default function AnalyticsDashboard() {
     link.click();
   };
 
-  const activeDonutData = distributionTab === 'category' ? computedData.categoryData : computedData.productData;
-
   return (
     <div className="space-y-6">
       {/* Top Header & Range Switcher */}
@@ -232,11 +285,11 @@ export default function AnalyticsDashboard() {
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-black font-display text-gray-900 tracking-tight">Analytics & Business Intelligence</h2>
             <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold uppercase tracking-wider">
-              Live Dynamic DB
+              Neon DB Live
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Real-time calculations derived directly from active customer orders, items table, and category conversions.
+            Dynamic statistics derived directly from placed customer orders, product SKUs, and category conversions.
           </p>
         </div>
 
@@ -292,7 +345,7 @@ export default function AnalyticsDashboard() {
               Rs. {computedData.revenue.toLocaleString()}
             </p>
             <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
-              <ArrowUpRight size={13} /> Actual order conversions
+              <ArrowUpRight size={13} /> Real checkout conversions
             </p>
           </div>
         </div>
@@ -310,12 +363,12 @@ export default function AnalyticsDashboard() {
               {computedData.orders.toLocaleString()}
             </p>
             <p className="text-[11px] font-semibold text-blue-600 mt-1 flex items-center gap-1">
-              <PackageCheck size={13} /> {orders.length} total logged
+              <PackageCheck size={13} /> In selected date range
             </p>
           </div>
         </div>
 
-        {/* Active Customers (DYNAMIC: Users with >= 1 order) */}
+        {/* Active Customers */}
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex flex-col justify-between hover:border-gray-300 transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Active Customers</span>
@@ -328,7 +381,7 @@ export default function AnalyticsDashboard() {
               {computedData.customers.toLocaleString()}
             </p>
             <p className="text-[11px] font-semibold text-purple-600 mt-1">
-              Users with ≥ 1 order completed
+              Customers with ≥ 1 placed order
             </p>
           </div>
         </div>
@@ -346,7 +399,7 @@ export default function AnalyticsDashboard() {
               Rs. {computedData.avgOrderValue.toLocaleString()}
             </p>
             <p className="text-[11px] font-semibold text-amber-700 mt-1">
-              Revenue per checkout basket
+              Revenue per checkout transaction
             </p>
           </div>
         </div>
@@ -450,18 +503,20 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Animated Radial / Donut Distribution Section */}
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
             <div>
-              <h3 className="font-bold text-sm text-gray-900">Revenue Distribution (Radius Circle)</h3>
+              <h3 className="font-bold text-sm text-gray-900">
+                Revenue Distribution (Circle Radius)
+              </h3>
               <p className="text-[11px] text-gray-400">
                 {distributionTab === 'category' 
-                  ? 'Dynamic category share based on placed order items' 
-                  : 'Dynamic top product share ranked by order sales'}
+                  ? 'Dynamic category share aggregated from orders & product categories' 
+                  : 'Dynamic product sales aggregated from individual order items'}
               </p>
             </div>
 
-            {/* Tab Button Toggle: Revenue by Category vs Revenue by Product */}
-            <div className="flex items-center p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs">
+            {/* Tab Button Toggle: Revenue by Category vs Revenue by Products */}
+            <div className="flex items-center p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs self-start sm:self-auto">
               <button
                 type="button"
                 onClick={() => setDistributionTab('category')}
@@ -487,52 +542,94 @@ export default function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* Animated Donut / Radius Circle */}
+          {/* Animated Donut / Radius Circle with Center Stat */}
           <div className="h-64 w-full flex items-center justify-center relative my-2">
             <AnimatePresence mode="wait">
               <motion.div
                 key={distributionTab}
-                initial={{ opacity: 0, scale: 0.85, rotate: -45 }}
+                initial={{ opacity: 0, scale: 0.8, rotate: -60 }}
                 animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                exit={{ opacity: 0, scale: 0.85, rotate: 45 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-                className="w-full h-full"
+                exit={{ opacity: 0, scale: 0.8, rotate: 60 }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
+                className="w-full h-full relative"
               >
                 {activeDonutData && activeDonutData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={activeDonutData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={90}
-                        innerRadius={52}
-                        paddingAngle={4}
-                        dataKey="value"
-                        nameKey="name"
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                      >
-                        {activeDonutData.map((_, index) => (
-                          <Cell 
-                            key={`cell-${distributionTab}-${index}`} 
-                            fill={PALETTE[index % PALETTE.length]} 
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(val: any) => [`Rs. ${Number(val).toLocaleString()}`, 'Sales Volume']}
-                        contentStyle={{ 
-                          backgroundColor: '#18181b', 
-                          borderRadius: '12px', 
-                          color: '#ffffff', 
-                          border: 'none', 
-                          fontSize: '12px',
-                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={activeDonutData}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={95}
+                          innerRadius={62}
+                          paddingAngle={3}
+                          dataKey="value"
+                          nameKey="name"
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          isAnimationActive={true}
+                          animationBegin={0}
+                          animationDuration={1000}
+                          animationEasing="ease-out"
+                        >
+                          {activeDonutData.map((_, index) => (
+                            <Cell 
+                              key={`cell-${distributionTab}-${index}`} 
+                              fill={PALETTE[index % PALETTE.length]} 
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-zinc-950 text-white p-3 rounded-xl shadow-xl border border-zinc-800 text-xs space-y-1">
+                                  <p className="font-bold text-white text-xs">{data.name}</p>
+                                  {data.category && (
+                                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">
+                                      {data.category}
+                                    </p>
+                                  )}
+                                  <div className="pt-1 border-t border-zinc-800 space-y-0.5 text-[11px]">
+                                    <p className="text-emerald-400 font-mono font-bold">
+                                      Revenue: Rs. {Number(data.value).toLocaleString()}
+                                    </p>
+                                    <p className="text-zinc-300">
+                                      Units Ordered: <strong className="text-white">{data.units || data.sales || 0} units</strong>
+                                    </p>
+                                    {data.orders_count !== undefined && (
+                                      <p className="text-zinc-400">
+                                        In Orders: <strong className="text-white">{data.orders_count} orders</strong>
+                                      </p>
+                                    )}
+                                    <p className="text-zinc-400">
+                                      Share: <strong className="text-white">{data.percentage || 0}%</strong>
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+
+                    {/* Donut Center Overlay Info */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        {distributionTab === 'category' ? 'Total Units' : 'Units Sold'}
+                      </span>
+                      <span className="text-xl font-black font-display text-gray-900 leading-tight">
+                        {totalUnitsInView.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-600 font-mono">
+                        Rs. {(totalRevenueInView / 1000).toFixed(0)}k total
+                      </span>
+                    </div>
+                  </>
                 ) : (
                   <div className="h-full flex items-center justify-center text-xs text-gray-400">
                     No transactions recorded for this period.
@@ -542,95 +639,153 @@ export default function AnalyticsDashboard() {
             </AnimatePresence>
           </div>
 
-          {/* Dynamic Legend Pills */}
-          <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 text-xs">
-            {activeDonutData.slice(0, 4).map((item: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-gray-50/80 border border-gray-100">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span 
-                    className="w-2.5 h-2.5 rounded-full shrink-0" 
-                    style={{ backgroundColor: PALETTE[idx % PALETTE.length] }} 
-                  />
-                  <span className="font-semibold text-gray-800 truncate text-[11px]">{item.name}</span>
+          {/* Dynamic Breakdown List / Slices Details */}
+          <div className="space-y-2 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto pr-1">
+            {activeDonutData.slice(0, 6).map((item: any, idx: number) => {
+              const units = item.units || item.sales || 0;
+              const percentage = item.percentage || 0;
+              const color = PALETTE[idx % PALETTE.length];
+
+              return (
+                <div key={idx} className="p-2.5 rounded-xl bg-gray-50/80 hover:bg-gray-100/70 transition-colors border border-gray-100">
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span 
+                        className="w-3 h-3 rounded-full shrink-0 shadow-xs" 
+                        style={{ backgroundColor: color }} 
+                      />
+                      <span className="font-bold text-gray-900 truncate text-[11px]">{item.name}</span>
+                      {item.category && distributionTab === 'product' && (
+                        <span className="px-1.5 py-0.2 bg-gray-200/80 text-gray-600 rounded text-[9px] uppercase font-semibold shrink-0">
+                          {item.category}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-black font-mono text-gray-900 text-xs">
+                        Rs. {Number(item.value).toLocaleString()}
+                      </span>
+                      <span className="text-[11px] text-gray-500 font-semibold ml-2">
+                        ({units} {units === 1 ? 'unit' : 'units'})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Contribution Progress Bar */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${Math.max(percentage, 3)}%`, backgroundColor: color }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-500 font-mono w-7 text-right">
+                      {percentage}%
+                    </span>
+                  </div>
                 </div>
-                <span className="font-mono text-[11px] font-bold text-gray-600 shrink-0">
-                  {item.percentage ? `${item.percentage}%` : `Rs.${(item.value / 1000).toFixed(0)}k`}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Top Performing Products Ranked by Orders & Sales */}
+        {/* Top Performing Products Section */}
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-bold text-sm text-gray-900">Top Performing Products</h3>
-              <p className="text-[11px] text-gray-400">Ranked dynamically by total units sold & order revenue</p>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-sm text-gray-900">Top Performing Products</h3>
+                <Award size={15} className="text-amber-500" />
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Ranked dynamically by total units sold & order revenue (total units × price)
+              </p>
             </div>
-            <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg">
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
               Sales Leaders
             </span>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
             {computedData.topProducts.map((prod: any, index: number) => {
-              const prodImg = prod.image || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=200';
+              const prodImg = prod.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
+              const topPerformerRevenue = computedData.topProducts[0]?.revenue || 1;
+              const relativeBarPercent = Math.min(100, Math.round(((prod.revenue || 0) / topPerformerRevenue) * 100));
+
               return (
                 <div 
                   key={index} 
-                  className="flex items-center justify-between p-3 bg-gray-50/70 hover:bg-gray-100/80 rounded-xl transition-all border border-gray-100/90 text-xs"
+                  className="flex flex-col p-3 bg-gray-50/70 hover:bg-gray-100/80 rounded-xl transition-all border border-gray-100 text-xs space-y-2"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {/* Rank Badge */}
-                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[11px] shrink-0 shadow-xs ${
-                      index === 0 
-                        ? 'bg-amber-400 text-black' 
-                        : index === 1 
-                        ? 'bg-zinc-300 text-zinc-900' 
-                        : index === 2 
-                        ? 'bg-amber-700/80 text-white' 
-                        : 'bg-gray-200 text-gray-700'
-                    }`}>
-                      #{index + 1}
-                    </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* Rank Badge */}
+                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[11px] shrink-0 shadow-xs ${
+                        index === 0 
+                          ? 'bg-amber-400 text-black ring-2 ring-amber-300/50' 
+                          : index === 1 
+                          ? 'bg-zinc-300 text-zinc-900' 
+                          : index === 2 
+                          ? 'bg-amber-700/80 text-white' 
+                          : 'bg-gray-200 text-gray-700'
+                      }`}>
+                        #{index + 1}
+                      </span>
 
-                    {/* Thumbnail Image */}
-                    <img 
-                      src={prodImg} 
-                      alt={prod.name} 
-                      className="w-10 h-10 object-cover rounded-lg border border-gray-200 shrink-0" 
-                    />
+                      {/* Thumbnail Image */}
+                      <img 
+                        src={prodImg} 
+                        alt={prod.name} 
+                        className="w-10 h-10 object-cover rounded-lg border border-gray-200 shrink-0 bg-white" 
+                      />
 
-                    {/* Name & Category */}
-                    <div className="min-w-0">
-                      <p className="font-bold text-gray-900 truncate text-xs">{prod.name}</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">
-                        <span className="font-semibold text-gray-700">{prod.sales || 1} units sold</span>
-                        {prod.category && (
-                          <span className="px-1.5 py-0.2 bg-gray-200/60 rounded text-[9px] text-gray-600 uppercase">
-                            {prod.category}
+                      {/* Name & Category */}
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900 truncate text-xs">{prod.name}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-gray-800">
+                            {prod.sales || prod.units || 1} units sold
                           </span>
-                        )}
+                          {prod.orders_count !== undefined && (
+                            <span className="text-gray-400 text-[10px]">
+                              • in {prod.orders_count} {prod.orders_count === 1 ? 'order' : 'orders'}
+                            </span>
+                          )}
+                          {prod.category && (
+                            <span className="px-1.5 py-0.2 bg-gray-200/80 rounded text-[9px] text-gray-700 uppercase font-semibold">
+                              {prod.category}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Total Price Earned */}
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-gray-900 text-xs font-mono">
+                        Rs. {Number(prod.revenue || 0).toLocaleString()}
                       </p>
+                      <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Total Revenue</p>
                     </div>
                   </div>
 
-                  {/* Revenue */}
-                  <div className="text-right shrink-0">
-                    <p className="font-black text-gray-900 text-xs font-mono">
-                      Rs. {Number(prod.revenue || 0).toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Earned</p>
+                  {/* Relative Volume Progress Bar */}
+                  <div className="w-full bg-gray-200/80 h-1 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-zinc-900 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.max(relativeBarPercent, 4)}%` }}
+                    />
                   </div>
                 </div>
               );
             })}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400">
-            <span>Aggregated from order items & product SKUs</span>
-            <span className="font-mono text-gray-700 font-bold">Total: Rs. {computedData.revenue.toLocaleString()}</span>
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400">
+            <span>Aggregated from orders table & items</span>
+            <span className="font-mono text-gray-800 font-bold">
+              Total Revenue: Rs. {computedData.revenue.toLocaleString()}
+            </span>
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@ import {
   BarChart3, TrendingUp, ChevronDown, FileText,
   Percent, MessageSquare, Star, BookOpen, Mail,
   Menu, X, ExternalLink, Layers, CheckCircle2,
-  RefreshCw, SlidersHorizontal, Bell, Check
+  RefreshCw, SlidersHorizontal, Bell, Check, CheckCheck, UserCheck
 } from 'lucide-react';
 import { useStore, Product, Order } from '../../store/useStore';
 import { api } from '../../services/api';
@@ -53,6 +53,7 @@ export default function AdminPanel() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [notifFilter, setNotifFilter] = useState<'unread' | 'all'>('unread');
 
   // Sync active section with route param
   useEffect(() => {
@@ -92,7 +93,7 @@ export default function AdminPanel() {
 
   const fetchNotifications = async () => {
     try {
-      const data = await api.getNotifications();
+      const data = await api.getNotifications(true);
       if (Array.isArray(data)) {
         setNotifications(data);
       }
@@ -101,12 +102,23 @@ export default function AdminPanel() {
     }
   };
 
-  const markNotificationRead = async (id: string) => {
+  const markNotificationRead = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     try {
       await api.markNotificationRead(id);
       setNotifications(prev => prev.map(n => id === 'all' || n.id === id ? { ...n, is_read: true } : n));
     } catch (e) {
-      console.error(e);
+      console.error('Mark notification read error:', e);
+    }
+  };
+
+  const deleteNotification = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await api.deleteNotification(id);
+      setNotifications(prev => id === 'all' ? [] : prev.filter(n => n.id !== id));
+    } catch (e) {
+      console.error('Delete notification error:', e);
     }
   };
 
@@ -200,56 +212,171 @@ export default function AdminPanel() {
               </button>
 
               {showNotifDropdown && (
-                <div className="absolute right-0 mt-2 w-80 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-4 z-50 text-xs">
+                <div className="absolute right-0 mt-2 w-88 sm:w-96 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-4 z-50 text-xs">
+                  {/* Top Header */}
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-zinc-100">Notifications</span>
+                      <span className="font-bold text-zinc-100 text-sm">Notifications</span>
                       {unreadNotifCount > 0 && (
-                        <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-md font-mono text-[10px] font-semibold">
+                        <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/30 text-red-400 rounded-full font-mono text-[10px] font-bold">
                           {unreadNotifCount} unread
                         </span>
                       )}
                     </div>
-                    {unreadNotifCount > 0 && (
-                      <button
-                        onClick={() => markNotificationRead('all')}
-                        className="text-[11px] text-zinc-400 hover:text-emerald-400 font-medium transition-colors"
-                      >
-                        Mark all read
-                      </button>
-                    )}
+
+                    <div className="flex items-center gap-2">
+                      {unreadNotifCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => markNotificationRead('all')}
+                          className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-emerald-400 font-medium transition-colors"
+                          title="Mark all notifications as read"
+                        >
+                          <CheckCheck size={13} />
+                          <span>Mark all read</span>
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => deleteNotification('all')}
+                          className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                          title="Clear all notifications"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="mt-2 max-h-72 overflow-y-auto space-y-2">
-                    {notifications.length === 0 ? (
-                      <p className="text-zinc-500 text-center py-4">No notifications</p>
-                    ) : (
-                      notifications.map(n => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            markNotificationRead(n.id);
-                            if (n.link) setActiveSection(n.link);
-                            setShowNotifDropdown(false);
-                          }}
-                          className={`p-2.5 rounded-xl border cursor-pointer transition-colors ${
-                            n.is_read
-                              ? 'bg-zinc-900/50 border-zinc-800/60 text-zinc-400'
-                              : 'bg-zinc-800/80 border-zinc-700 text-zinc-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className={`font-semibold ${n.type === 'stock' ? 'text-amber-400' : 'text-zinc-200'}`}>
-                              {n.title}
-                            </span>
-                            <span className="text-[10px] text-zinc-500">
-                              {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                  {/* Filter Tabs: Unread vs All */}
+                  <div className="flex items-center gap-1.5 p-1 bg-zinc-900 rounded-xl my-2.5 border border-zinc-800/80 text-[11px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setNotifFilter('unread')}
+                      className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
+                        notifFilter === 'unread'
+                          ? 'bg-zinc-800 text-white font-bold shadow-xs'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Unread ({unreadNotifCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNotifFilter('all')}
+                      className={`flex-1 py-1.5 rounded-lg text-center transition-all ${
+                        notifFilter === 'all'
+                          ? 'bg-zinc-800 text-white font-bold shadow-xs'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      All ({notifications.length})
+                    </button>
+                  </div>
+
+                  {/* Notifications List */}
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                    {(() => {
+                      const displayedList = notifFilter === 'unread' 
+                        ? notifications.filter(n => !n.is_read) 
+                        : notifications;
+
+                      if (displayedList.length === 0) {
+                        return (
+                          <div className="text-center py-8 px-4 text-zinc-500 space-y-2">
+                            <Bell size={24} className="mx-auto text-zinc-700 opacity-60" />
+                            <p className="text-xs font-semibold text-zinc-400">
+                              {notifFilter === 'unread' ? 'No unread notifications' : 'No notifications found'}
+                            </p>
+                            <p className="text-[11px] text-zinc-600">
+                              New orders, registrations, and newsletter signups will appear here.
+                            </p>
                           </div>
-                          <p className="text-[11px] mt-1 line-clamp-2 text-zinc-300">{n.message}</p>
-                        </div>
-                      ))
-                    )}
+                        );
+                      }
+
+                      return displayedList.map(n => {
+                        const isOrder = n.type === 'order';
+                        const isUser = n.type === 'user';
+                        const isNews = n.type === 'newsletter';
+                        const isStock = n.type === 'stock';
+
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              markNotificationRead(n.id);
+                              if (n.link) setActiveSection(n.link);
+                              setShowNotifDropdown(false);
+                            }}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer group flex items-start justify-between gap-2.5 ${
+                              n.is_read
+                                ? 'bg-zinc-950 border-zinc-900 text-zinc-400 opacity-75 hover:opacity-100 hover:bg-zinc-900/60'
+                                : 'bg-zinc-900 border-zinc-800 text-zinc-200 hover:border-zinc-700 hover:bg-zinc-900/90'
+                            }`}
+                          >
+                            {/* Type Icon Badge */}
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 ${
+                              isOrder 
+                                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/50' 
+                                : isUser 
+                                ? 'bg-blue-950/60 text-blue-400 border-blue-800/50' 
+                                : isNews 
+                                ? 'bg-amber-950/60 text-amber-400 border-amber-800/50' 
+                                : isStock 
+                                ? 'bg-rose-950/60 text-rose-400 border-rose-800/50' 
+                                : 'bg-purple-950/60 text-purple-400 border-purple-800/50'
+                            }`}>
+                              {isOrder && <ShoppingBag size={14} />}
+                              {isUser && <UserCheck size={14} />}
+                              {isNews && <Mail size={14} />}
+                              {isStock && <AlertTriangle size={14} />}
+                              {!isOrder && !isUser && !isNews && !isStock && <Bell size={14} />}
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`font-bold text-xs truncate ${
+                                  !n.is_read ? 'text-zinc-100' : 'text-zinc-300'
+                                }`}>
+                                  {n.title}
+                                </span>
+                                <span className="text-[10px] text-zinc-500 font-mono shrink-0">
+                                  {n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
+                                {n.message}
+                              </p>
+                            </div>
+
+                            {/* Action Buttons: Mark as Read & Delete */}
+                            <div className="flex items-center gap-1 shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                              {!n.is_read && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => markNotificationRead(n.id, e)}
+                                  className="p-1 rounded-lg text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 transition-colors"
+                                  title="Mark as read"
+                                >
+                                  <Check size={13} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => deleteNotification(n.id, e)}
+                                className="p-1 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                                title="Delete notification"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               )}

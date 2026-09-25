@@ -1167,6 +1167,102 @@ async function syncStoresFromNeon() {
         console.warn('Coupon codes table check note:', cpTblErr.message);
       }
 
+      // Automatically ensure notifications table exists with all required columns
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS notifications (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+            title varchar(255) NOT NULL,
+            message text NOT NULL,
+            type varchar(50) NOT NULL DEFAULT 'info',
+            link varchar(500),
+            is_read boolean NOT NULL DEFAULT false,
+            created_at timestamptz NOT NULL DEFAULT now()
+          )
+        `;
+        await sql`CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications (user_id)`;
+        await sql`CREATE INDEX IF NOT EXISTS notifications_is_read_idx ON notifications (is_read)`;
+        await sql`CREATE INDEX IF NOT EXISTS notifications_created_idx ON notifications (created_at)`;
+
+        // Automatically backfill initial notifications from existing DB orders, users, and subscribers if empty
+        const notifCount = await sql`SELECT count(*)::int as count FROM notifications`;
+        if (notifCount && notifCount[0]?.count === 0) {
+          const recentOrders = await sql`SELECT id, order_number, user_id, total, items, shipping_address, created_at FROM orders ORDER BY created_at DESC LIMIT 5`;
+          for (const o of recentOrders) {
+            const items = Array.isArray(o.items) ? o.items : [];
+            const email = o.shipping_address?.email || 'Customer';
+            await sql`
+              INSERT INTO notifications (user_id, title, message, type, link, is_read, created_at)
+              VALUES (
+                ${o.user_id}, 
+                'New Order Placed', 
+                ${'Order #' + o.order_number + ' received for Rs. ' + Number(o.total).toLocaleString() + ' (' + items.length + ' items) by ' + email},
+                'order',
+                'orders',
+                false,
+                ${o.created_at}
+              )
+            `;
+          }
+          const recentUsers = await sql`SELECT id, name, email, created_at FROM users WHERE role = 'customer' ORDER BY created_at DESC LIMIT 5`;
+          for (const u of recentUsers) {
+            await sql`
+              INSERT INTO notifications (user_id, title, message, type, link, is_read, created_at)
+              VALUES (
+                ${u.id},
+                'New Customer Registered',
+                ${(u.name || 'New Customer') + ' (' + u.email + ') registered on Ravenza'},
+                'user',
+                'customers',
+                false,
+                ${u.created_at}
+              )
+            `;
+          }
+          const recentSubs = await sql`SELECT id, email, subscribed_at FROM newsletter_subscribers ORDER BY subscribed_at DESC LIMIT 5`;
+          for (const s of recentSubs) {
+            await sql`
+              INSERT INTO notifications (title, message, type, link, is_read, created_at)
+              VALUES (
+                'New Newsletter Subscriber',
+                ${s.email + ' subscribed to Ravenza VIP updates'},
+                'newsletter',
+                'newsletter',
+                false,
+                ${s.subscribed_at}
+              )
+            `;
+          }
+          console.log('✅ Backfilled initial notifications from DB records');
+        }
+      } catch (notifTblErr: any) {
+        console.warn('Notifications table check note:', notifTblErr.message);
+      }
+
+      // Automatically ensure order_items table exists with all required columns
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS order_items (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            order_id uuid NOT NULL,
+            product_id uuid NOT NULL,
+            product_name varchar(200),
+            variant_id uuid,
+            quantity integer NOT NULL,
+            unit_price numeric(10, 2) NOT NULL,
+            total_price numeric(10, 2),
+            sku varchar(50),
+            size varchar(20),
+            color varchar(50),
+            created_at timestamptz NOT NULL DEFAULT now()
+          )
+        `;
+        await sql`CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items (order_id)`;
+      } catch (oiTblErr: any) {
+        console.warn('Order items table check note:', oiTblErr.message);
+      }
+
       // Sync coupons from Neon DB
       try {
         const dbCoupons = await sql`SELECT * FROM coupon_codes ORDER BY created_at DESC`;
@@ -1652,6 +1748,35 @@ app.use((err: any, req: any, res: any, next: any) => {
         is_active: true,
       };
       usersStore.push(newUser);
+
+      // Insert notification for new customer registration
+      if (sql) {
+        try {
+          await sql`
+            INSERT INTO notifications (user_id, title, message, type, link, is_read, created_at)
+            VALUES (
+              ${newUserId.startsWith('user-') ? null : newUserId},
+              'New Customer Registered',
+              ${(newUser.name || 'New Customer') + ' (' + newUser.email + ') registered an account.'},
+              'user',
+              'customers',
+              false,
+              NOW()
+            )
+          `;
+        } catch (nErr: any) {
+          console.warn('Registration notification insert error:', nErr.message);
+        }
+      }
+      adminNotificationsStore.unshift({
+        id: `notif-reg-${Date.now()}`,
+        title: 'New Customer Registered',
+        message: `${newUser.name || 'New Customer'} (${newUser.email}) registered an account.`,
+        type: 'user',
+        link: 'customers',
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
 
       const token = jwt.sign(
         { id: newUser.id, email: newUser.email, role: newUser.role, name: newUser.name },
@@ -3013,6 +3138,57 @@ app.use((err: any, req: any, res: any, next: any) => {
             createdOrderId = inserted[0].id;
           }
 
+          // Populate relational order_items table for direct SQL analytics & reporting
+          if (Array.isArray(items) && items.length > 0) {
+            for (const item of items) {
+              const pId = item.product_id || item.product?.id || item.id;
+              let validProdId = pId;
+              const matchedP = productsStore.find(p => p.id === pId || p.slug === item.slug || p.name === item.name);
+              if (matchedP && matchedP.id) validProdId = matchedP.id;
+
+              try {
+                await sql`
+                  INSERT INTO order_items (
+                    order_id, product_id, product_name, quantity, unit_price, total_price, size, color
+                  ) VALUES (
+                    ${createdOrderId},
+                    ${validProdId},
+                    ${item.product_name || item.name || matchedP?.name || 'Streetwear Garment'},
+                    ${Number(item.quantity) || 1},
+                    ${Number(item.price || item.unit_price) || 0},
+                    ${(Number(item.quantity) || 1) * (Number(item.price || item.unit_price) || 0)},
+                    ${item.size || 'M'},
+                    ${item.color || 'Standard'}
+                  )
+                `;
+              } catch (oiErr: any) {
+                console.warn('order_items insert note:', oiErr.message);
+              }
+            }
+          }
+
+          // Insert order notification into notifications table
+          try {
+            const customerDisplayName = shippingAddress.firstName 
+              ? `${shippingAddress.firstName} ${shippingAddress.lastName || ''}`.trim() 
+              : (shippingAddress.full_name || orderEmail);
+            await sql`
+              INSERT INTO notifications (
+                user_id, title, message, type, link, is_read, created_at
+              ) VALUES (
+                ${dbUserId},
+                'New Order Placed',
+                ${'Order #' + orderNumber + ' received for Rs. ' + Number(total).toLocaleString() + ' (' + items.length + ' item' + (items.length > 1 ? 's' : '') + ') by ' + customerDisplayName},
+                'order',
+                'orders',
+                false,
+                NOW()
+              )
+            `;
+          } catch (notifErr: any) {
+            console.warn('Order notification insert note:', notifErr.message);
+          }
+
           // If a discount coupon was applied, increment used_count in coupon_codes table
           if (discountCode) {
             try {
@@ -3109,6 +3285,16 @@ app.use((err: any, req: any, res: any, next: any) => {
       };
 
       ordersStore.unshift(newOrder as any);
+
+      adminNotificationsStore.unshift({
+        id: `notif-ord-${Date.now()}`,
+        title: 'New Order Placed',
+        message: `Order #${orderNumber} received for Rs. ${Number(total).toLocaleString()} (${items.length} items)`,
+        type: 'order',
+        link: 'orders',
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
 
       if (discountCode) {
         const found = couponsStore.find(c => c.code.toUpperCase() === discountCode.trim().toUpperCase());
@@ -4190,96 +4376,161 @@ app.use((err: any, req: any, res: any, next: any) => {
       }));
 
       // Breakdown by Category and Product
-      const categoryMap: Record<string, { revenue: number; count: number }> = {};
-      const productMap: Record<string, { id: string; name: string; sales: number; revenue: number; image?: string; category: string }> = {};
+      const categoryMap: Record<string, { id: string; name: string; revenue: number; units: number; orderIds: Set<string> }> = {};
+      const productMap: Record<string, { id: string; name: string; category: string; units: number; revenue: number; image: string; unit_price: number; orderIds: Set<string> }> = {};
 
       const catLookup = new Map<string, string>();
       categoriesStore.forEach((c) => catLookup.set(c.id, c.name));
 
       rangeOrders.forEach((o: any) => {
-        const items = Array.isArray(o.items) ? o.items : (typeof o.items === 'string' ? JSON.parse(o.items || '[]') : []);
+        const orderId = String(o.id || o.order_number || Math.random());
+        const items = Array.isArray(o.items) ? o.items : (typeof o.items === 'string' ? (() => { try { return JSON.parse(o.items || '[]'); } catch { return []; } })() : []);
         items.forEach((item: any) => {
           const qty = Number(item.quantity) || 1;
           const price = Number(item.price || item.unit_price) || 0;
           const itemTotal = price * qty;
           const prodId = item.product_id || item.product?.id || item.id;
-          const matchedProd = productsStore.find((p) => p.id === prodId || p.slug === item.slug);
+          const matchedProd = productsStore.find((p) => p.id === prodId || p.slug === item.slug || p.name === item.name);
 
           let catName = 'Streetwear';
+          let catId = matchedProd?.category_id || 'cat-general';
           if (matchedProd?.category_name) catName = matchedProd.category_name;
           else if (matchedProd?.category_id && catLookup.has(matchedProd.category_id)) catName = catLookup.get(matchedProd.category_id)!;
           else if (matchedProd?.category) catName = matchedProd.category;
           else if (item.category) catName = item.category;
 
-          if (!categoryMap[catName]) categoryMap[catName] = { revenue: 0, count: 0 };
+          if (!categoryMap[catName]) {
+            categoryMap[catName] = { id: catId, name: catName, revenue: 0, units: 0, orderIds: new Set() };
+          }
           categoryMap[catName].revenue += itemTotal;
-          categoryMap[catName].count += qty;
+          categoryMap[catName].units += qty;
+          categoryMap[catName].orderIds.add(orderId);
 
-          const prodName = matchedProd?.name || item.product?.name || item.name || 'Streetwear Garment';
-          const prodImage = matchedProd?.image || matchedProd?.images?.[0] || item.image || item.product?.images?.[0] || '';
+          const prodName = matchedProd?.name || item.product_name || item.name || 'Streetwear Garment';
+          const prodImage = matchedProd?.image_url || matchedProd?.image || matchedProd?.images?.[0] || item.image || item.product?.images?.[0] || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
 
           if (!productMap[prodName]) {
             productMap[prodName] = {
-              id: prodId || `prod-${Math.random()}`,
+              id: matchedProd?.id || prodId || `prod-${Math.random()}`,
               name: prodName,
-              sales: 0,
+              category: catName,
+              units: 0,
               revenue: 0,
               image: prodImage,
-              category: catName,
+              unit_price: price || Number(matchedProd?.base_price) || 0,
+              orderIds: new Set()
             };
           }
-          productMap[prodName].sales += qty;
+          productMap[prodName].units += qty;
           productMap[prodName].revenue += itemTotal;
+          productMap[prodName].orderIds.add(orderId);
           if (!productMap[prodName].image && prodImage) productMap[prodName].image = prodImage;
         });
       });
 
-      // Default fallback if brand-new store with zero order items yet
-      if (Object.keys(categoryMap).length === 0) {
-        categoriesStore.slice(0, 5).forEach((c, idx) => {
-          categoryMap[c.name] = { revenue: (5 - idx) * 3500, count: 5 - idx };
-        });
+      // Incorporate order_items table from Neon DB if connected
+      if (sql) {
+        try {
+          const dbItemRows = await sql`
+            SELECT 
+              oi.product_id,
+              oi.product_name,
+              c.name as category_name,
+              c.id as category_id,
+              COALESCE(p.image_url, (p.images->>0), '') as image,
+              p.base_price,
+              oi.order_id,
+              oi.quantity,
+              oi.unit_price,
+              oi.total_price
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            LEFT JOIN products p ON oi.product_id = p.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE o.created_at >= ${cutoff}
+          `;
+          if (dbItemRows && dbItemRows.length > 0) {
+            dbItemRows.forEach((row: any) => {
+              const orderId = String(row.order_id);
+              const prodName = row.product_name || 'Streetwear Garment';
+              const catName = row.category_name || 'Streetwear';
+              const catId = row.category_id || 'cat-general';
+              const qty = Number(row.quantity) || 1;
+              const unitPrice = Number(row.unit_price) || 0;
+              const rowTotal = Number(row.total_price) || (qty * unitPrice);
+
+              if (!categoryMap[catName]) {
+                categoryMap[catName] = { id: catId, name: catName, revenue: 0, units: 0, orderIds: new Set() };
+              }
+              if (!categoryMap[catName].orderIds.has(orderId)) {
+                categoryMap[catName].revenue += rowTotal;
+                categoryMap[catName].units += qty;
+                categoryMap[catName].orderIds.add(orderId);
+              }
+
+              if (!productMap[prodName]) {
+                productMap[prodName] = {
+                  id: row.product_id,
+                  name: prodName,
+                  category: catName,
+                  units: 0,
+                  revenue: 0,
+                  image: row.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop',
+                  unit_price: unitPrice || Number(row.base_price) || 0,
+                  orderIds: new Set()
+                };
+              }
+              if (!productMap[prodName].orderIds.has(orderId)) {
+                productMap[prodName].units += qty;
+                productMap[prodName].revenue += rowTotal;
+                productMap[prodName].orderIds.add(orderId);
+              }
+            });
+          }
+        } catch (dbItemsErr) {
+          console.warn('order_items SQL query note:', dbItemsErr);
+        }
       }
 
-      const totalCatRevenue = Object.values(categoryMap).reduce((s, c) => s + c.revenue, 0) || 1;
-      const categoryRevenue = Object.entries(categoryMap)
-        .map(([name, data]) => ({
-          name,
-          value: data.revenue,
-          count: data.count,
-          percentage: Math.round((data.revenue / totalCatRevenue) * 100),
+      const totalCatRevenue = Object.values(categoryMap).reduce((s, c) => s + c.revenue, 0) || totalRevenue || 1;
+      const categoryRevenue = Object.values(categoryMap)
+        .map((c) => ({
+          category_id: c.id,
+          name: c.name,
+          value: c.revenue,
+          units: c.units,
+          orders_count: c.orderIds.size,
+          percentage: Math.round((c.revenue / totalCatRevenue) * 100),
         }))
         .sort((a, b) => b.value - a.value);
 
-      const topProductsList = Object.values(productMap).sort((a, b) => b.revenue - a.revenue);
-      const totalProdRevenue = topProductsList.reduce((s, p) => s + p.revenue, 0) || 1;
+      const topProductsList = Object.values(productMap).sort((a, b) => b.units !== a.units ? b.units - a.units : b.revenue - a.revenue);
+      const totalProdRevenue = topProductsList.reduce((s, p) => s + p.revenue, 0) || totalRevenue || 1;
 
-      const productRevenue = (topProductsList.length > 0 ? topProductsList : productsStore.slice(0, 6).map((p) => ({
-        id: p.id,
+      const productRevenue = topProductsList.map((p) => ({
+        product_id: p.id,
         name: p.name,
-        sales: 5,
-        revenue: (p.base_price || 3500) * 5,
-        image: p.image || p.images?.[0] || '',
-        category: p.category_name || 'Streetwear',
-      })))
-        .slice(0, 6)
-        .map((p) => ({
-          name: p.name,
-          value: p.revenue,
-          sales: p.sales,
-          percentage: Math.round((p.revenue / totalProdRevenue) * 100),
-          image: p.image,
-          category: p.category,
-        }));
+        category: p.category,
+        value: p.revenue,
+        units: p.units,
+        sales: p.units,
+        orders_count: p.orderIds.size,
+        percentage: Math.round((p.revenue / totalProdRevenue) * 100),
+        image: p.image,
+        unit_price: p.unit_price,
+      }));
 
-      const topPerformingProducts = (topProductsList.length > 0 ? topProductsList : productsStore.slice(0, 6).map((p, i) => ({
-        id: p.id,
+      const topPerformingProducts = topProductsList.slice(0, 8).map((p) => ({
+        product_id: p.id,
         name: p.name,
-        sales: Math.max(1, 12 - i * 2),
-        revenue: (p.base_price || 3500) * Math.max(1, 12 - i * 2),
-        image: p.image || p.images?.[0] || '',
-        category: p.category_name || 'Streetwear',
-      }))).slice(0, 6);
+        category: p.category,
+        sales: p.units,
+        units: p.units,
+        revenue: p.revenue,
+        orders_count: p.orderIds.size,
+        image: p.image,
+        unit_price: p.unit_price,
+      }));
 
       res.json({
         totalRevenue,
@@ -4355,6 +4606,32 @@ app.use((err: any, req: any, res: any, next: any) => {
           VALUES (${cleanEmail}, true)
           RETURNING *
         `;
+        if (inserted && inserted.length > 0) {
+          try {
+            await sql`
+              INSERT INTO notifications (title, message, type, link, is_read, created_at)
+              VALUES (
+                'New Newsletter Subscriber',
+                ${cleanEmail + ' subscribed to Ravenza VIP newsletter.'},
+                'newsletter',
+                'newsletter',
+                false,
+                NOW()
+              )
+            `;
+          } catch (notifErr: any) {
+            console.warn('Newsletter notification insert note:', notifErr.message);
+          }
+        }
+        adminNotificationsStore.unshift({
+          id: `notif-sub-${Date.now()}`,
+          title: 'New Newsletter Subscriber',
+          message: `${cleanEmail} subscribed to Ravenza VIP newsletter.`,
+          type: 'newsletter',
+          link: 'newsletter',
+          is_read: false,
+          created_at: new Date().toISOString()
+        });
         logAdminAudit('Newsletter Subscription', cleanEmail, 'Storefront');
         // Dispatch Welcome Email via Google Apps Script
         sendNewsletterWelcomeEmail(cleanEmail).catch(() => {});
@@ -5199,10 +5476,26 @@ app.use((err: any, req: any, res: any, next: any) => {
       if (sql) {
         try {
           const rows = await sql`
-            SELECT id, name, email, phone, role, is_active, created_at, updated_at
-            FROM users
-            WHERE role = 'customer' OR role IS NULL
-            ORDER BY created_at DESC
+            SELECT 
+              u.id, 
+              u.name, 
+              u.email, 
+              u.phone, 
+              u.role, 
+              u.is_verified, 
+              u.is_active, 
+              u.created_at,
+              COUNT(DISTINCT o.id)::int as orders_count,
+              COALESCE(SUM(o.total::numeric), 0)::numeric(10,2) as total_spent
+            FROM users u
+            LEFT JOIN orders o ON (
+              o.user_id = u.id 
+              OR LOWER(o.shipping_address->>'email') = LOWER(u.email)
+              OR o.user_id::text = u.email
+            )
+            WHERE u.role = 'customer' OR u.role IS NULL
+            GROUP BY u.id, u.name, u.email, u.phone, u.role, u.is_verified, u.is_active, u.created_at
+            ORDER BY total_spent DESC, u.created_at DESC
           `;
           if (rows && rows.length > 0) {
             return res.json(rows.map((r: any) => ({
@@ -5211,31 +5504,32 @@ app.use((err: any, req: any, res: any, next: any) => {
               email: r.email,
               phone: r.phone || 'N/A',
               role: r.role || 'customer',
-              is_verified: true,
+              is_verified: r.is_verified !== false,
               is_active: r.is_active !== false,
               created_at: r.created_at,
-              orders_count: ordersStore.filter(o => o.user_id === r.id || o.shipping_address?.email === r.email).length,
-              total_spent: ordersStore
-                .filter(o => o.user_id === r.id || o.shipping_address?.email === r.email)
-                .reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+              orders_count: Number(r.orders_count) || 0,
+              total_spent: Number(r.total_spent) || 0,
             })));
           }
         } catch (e) {
           console.error('Neon customers query error:', e);
         }
       }
-      res.json(usersStore.filter(u => u.role === 'customer').map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        phone: '03001234567',
-        role: u.role,
-        is_verified: u.is_verified,
-        is_active: u.is_active,
-        created_at: '2024-01-15T10:00:00Z',
-        orders_count: 3,
-        total_spent: 12450
-      })));
+      res.json(usersStore.filter(u => u.role === 'customer').map(u => {
+        const uOrders = ordersStore.filter(o => o.user_id === u.id || o.shipping_address?.email?.toLowerCase() === u.email?.toLowerCase());
+        return {
+          id: u.id,
+          name: u.name || 'Anonymous Customer',
+          email: u.email,
+          phone: u.phone || 'N/A',
+          role: u.role,
+          is_verified: u.is_verified !== false,
+          is_active: u.is_active !== false,
+          created_at: u.created_at || '2024-01-15T10:00:00Z',
+          orders_count: uOrders.length,
+          total_spent: uOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0)
+        };
+      }));
     } catch (err: any) {
       res.status(500).json({ message: 'Error fetching customers', error: err.message });
     }
@@ -5284,19 +5578,25 @@ app.use((err: any, req: any, res: any, next: any) => {
 
   // ==================== NOTIFICATIONS ROUTES ====================
   app.get('/api/admin/notifications', async (req, res) => {
+    const showAll = req.query.all === 'true';
     if (sql) {
       try {
-        const rows = await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 50`;
+        const rows = showAll
+          ? await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 60`
+          : await sql`SELECT * FROM notifications WHERE is_read = false ORDER BY created_at DESC LIMIT 60`;
         if (rows && rows.length > 0) {
           return res.json(rows.map((r: any) => ({
             id: r.id,
             title: r.title,
             message: r.message,
             type: r.type || 'system',
-            is_read: r.is_read,
+            is_read: r.is_read === true,
             created_at: r.created_at,
             link: r.link
           })));
+        } else if (!showAll) {
+          // If no unread rows in DB, return empty array
+          return res.json([]);
         }
       } catch (e) {
         console.error('Neon notifications fetch error:', e);
@@ -5337,20 +5637,36 @@ app.use((err: any, req: any, res: any, next: any) => {
         }
       });
 
-      res.json(adminNotificationsStore || []);
+      const filtered = showAll ? adminNotificationsStore : adminNotificationsStore.filter(n => !n.is_read);
+      res.json(filtered || []);
     } catch (err: any) {
       console.error('Error fetching admin notifications:', err);
       res.json(adminNotificationsStore || []);
     }
   });
 
-  app.post('/api/admin/notifications', optionalAuth, (req, res) => {
+  app.post('/api/admin/notifications', optionalAuth, async (req, res) => {
     const { title, message, type, link } = req.body;
     if (!title || !message) {
       return res.status(400).json({ message: 'Title and message required' });
     }
+    let notifId = `notif-custom-${Date.now()}`;
+    if (sql) {
+      try {
+        const rows = await sql`
+          INSERT INTO notifications (title, message, type, link, is_read, created_at)
+          VALUES (${title}, ${message}, ${type || 'system'}, ${link || 'dashboard'}, false, NOW())
+          RETURNING id, created_at
+        `;
+        if (rows && rows.length > 0) {
+          notifId = rows[0].id;
+        }
+      } catch (e: any) {
+        console.error('Neon notification insert error:', e.message);
+      }
+    }
     const newNotif = {
-      id: `notif-custom-${Date.now()}`,
+      id: notifId,
       title,
       message,
       type: type || 'system',
@@ -5362,8 +5678,19 @@ app.use((err: any, req: any, res: any, next: any) => {
     res.status(201).json(newNotif);
   });
 
-  app.put('/api/admin/notifications/:id/read', (req, res) => {
+  app.put('/api/admin/notifications/:id/read', async (req, res) => {
     const { id } = req.params;
+    if (sql) {
+      try {
+        if (id === 'all') {
+          await sql`UPDATE notifications SET is_read = true WHERE is_read = false`;
+        } else {
+          await sql`UPDATE notifications SET is_read = true WHERE id::text = ${id}`;
+        }
+      } catch (e: any) {
+        console.error('Neon mark notification read error:', e.message);
+      }
+    }
     if (id === 'all') {
       adminNotificationsStore = adminNotificationsStore.map(n => ({ ...n, is_read: true }));
     } else {
@@ -5372,9 +5699,24 @@ app.use((err: any, req: any, res: any, next: any) => {
     res.json({ success: true });
   });
 
-  app.delete('/api/admin/notifications/:id', (req, res) => {
+  app.delete('/api/admin/notifications/:id', async (req, res) => {
     const { id } = req.params;
-    adminNotificationsStore = adminNotificationsStore.filter(n => n.id !== id);
+    if (sql) {
+      try {
+        if (id === 'all') {
+          await sql`DELETE FROM notifications`;
+        } else {
+          await sql`DELETE FROM notifications WHERE id::text = ${id}`;
+        }
+      } catch (e: any) {
+        console.error('Neon delete notification error:', e.message);
+      }
+    }
+    if (id === 'all') {
+      adminNotificationsStore = [];
+    } else {
+      adminNotificationsStore = adminNotificationsStore.filter(n => n.id !== id);
+    }
     res.json({ success: true });
   });
 

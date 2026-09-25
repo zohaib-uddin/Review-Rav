@@ -410,8 +410,8 @@ class ApiService {
   }
 
   // Admin Notifications
-  async getNotifications() {
-    return this.request<any[]>('/admin/notifications');
+  async getNotifications(all = false) {
+    return this.request<any[]>(`/admin/notifications${all ? '?all=true' : ''}`);
   }
 
   async markNotificationRead(id: string) {
