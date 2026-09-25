@@ -16,6 +16,8 @@ export default function AdminCategories() {
     badge: '',
     tag: '',
     cover_image_url: '',
+    warm_image_url: '',
+    focus_image_url: '',
     parent_id: null as string | null,
     sort_order: 0,
     is_featured_in_focus: false,
@@ -52,6 +54,18 @@ export default function AdminCategories() {
       }
     }
 
+    // Validation: Collection in Focus image is required when checked
+    if (formData.is_featured_in_focus && (!formData.focus_image_url || !formData.focus_image_url.trim())) {
+      setValidationError('Collection in Focus image (3:4 aspect ratio) is required when enabled.');
+      return;
+    }
+
+    // Validation: Warm Chapter image is required when checked
+    if (formData.is_warm_chapter && (!formData.warm_image_url || !formData.warm_image_url.trim())) {
+      setValidationError('Warm Chapter image (9:16 aspect ratio) is required when enabled.');
+      return;
+    }
+
     try {
       const url = editingCategory ? `/api/categories/${editingCategory.id}` : '/api/categories';
       const response = await fetch(url, {
@@ -85,6 +99,8 @@ export default function AdminCategories() {
         badge: '',
         tag: '',
         cover_image_url: '',
+        warm_image_url: '',
+        focus_image_url: '',
         parent_id: null,
         sort_order: 0,
         is_featured_in_focus: false,
@@ -110,6 +126,8 @@ export default function AdminCategories() {
       badge: category.badge || '',
       tag: category.tag || '',
       cover_image_url: category.cover_image_url || '',
+      warm_image_url: category.warm_image_url || '',
+      focus_image_url: category.focus_image_url || '',
       parent_id: category.parent_id,
       sort_order: category.sort_order,
       is_featured_in_focus: category.is_featured_in_focus || false,
@@ -152,6 +170,14 @@ export default function AdminCategories() {
       return;
     }
 
+    // Validation: Require 3:4 focus_image_url when enabling
+    if (newValue && !category.focus_image_url) {
+      handleEdit(category);
+      setValidationError(`"${category.name}" requires a 3:4 aspect ratio image before enabling "Collections in Focus". Please upload it below.`);
+      adminToast.error('Focus Image Required', 'Please upload a 3:4 image for Collection in Focus.');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/categories/${category.id}`, {
         method: 'PUT',
@@ -178,6 +204,15 @@ export default function AdminCategories() {
 
   const handleToggleWarmChapter = async (category: any, newValue: boolean) => {
     setValidationError('');
+
+    // Validation: Require 9:16 warm_image_url when enabling
+    if (newValue && !category.warm_image_url) {
+      handleEdit(category);
+      setValidationError(`"${category.name}" requires a 9:16 aspect ratio image before enabling "Warm Chapters". Please upload it below.`);
+      adminToast.error('Warm Image Required', 'Please upload a 9:16 image for Warm Chapter.');
+      return;
+    }
+
     try {
       const response = await fetch(`/api/categories/${category.id}`, {
         method: 'PUT',
@@ -246,27 +281,56 @@ export default function AdminCategories() {
             {mainCategories.map(category => (
               <div key={category.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-4">
-                  {category.cover_image_url && (
-                    <img src={category.cover_image_url} alt={category.name} className="w-12 h-12 rounded-lg object-cover" />
-                  )}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {category.cover_image_url ? (
+                      <div className="relative group/thumb" title="16:9 Cover Banner">
+                        <img src={category.cover_image_url} alt={category.name} className="w-14 h-9 rounded-md object-cover border" />
+                        <span className="absolute bottom-0 right-0 bg-black/80 text-[8px] text-white px-1 rounded-tl font-mono">16:9</span>
+                      </div>
+                    ) : (
+                      <div className="w-14 h-9 rounded-md bg-gray-100 border flex items-center justify-center text-[10px] text-gray-400">
+                        No cover
+                      </div>
+                    )}
+                    {category.focus_image_url && (
+                      <div className="relative group/thumb" title="3:4 Collections in Focus Image">
+                        <img src={category.focus_image_url} alt="Focus" className="w-7 h-9 rounded-md object-cover border border-emerald-400" />
+                        <span className="absolute bottom-0 right-0 bg-emerald-700 text-[8px] text-white px-0.5 rounded-tl font-mono">3:4</span>
+                      </div>
+                    )}
+                    {category.warm_image_url && (
+                      <div className="relative group/thumb" title="9:16 Warm Chapter Image">
+                        <img src={category.warm_image_url} alt="Warm" className="w-5 h-9 rounded-md object-cover border border-amber-400" />
+                        <span className="absolute bottom-0 right-0 bg-amber-700 text-[8px] text-white px-0.5 rounded-tl font-mono">9:16</span>
+                      </div>
+                    )}
+                  </div>
                   <div>
                     <h4 className="font-medium">{category.name}</h4>
                     <p className="text-sm text-gray-500">{category.slug}</p>
-                    {category.badge && (
-                      <span className="inline-block mt-1 bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">
-                        {category.badge}
-                      </span>
-                    )}
-                    {category.is_featured_in_focus && (
-                      <span className="inline-block mt-1 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-medium">
-                        ✓ Focus (#{category.display_order_in_focus || 0})
-                      </span>
-                    )}
-                    {category.is_warm_chapter && (
-                      <span className="inline-block mt-1 ml-1 bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-medium">
-                        🔥 Warm Chapter (#{category.display_order_warm_chapter || 0})
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      {category.badge && (
+                        <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                          {category.badge}
+                        </span>
+                      )}
+                      {category.is_featured_in_focus && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          category.focus_image_url ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700 animate-pulse'
+                        }`}>
+                          ✓ Focus (#{category.display_order_in_focus || 0})
+                          {!category.focus_image_url && ' ⚠️ No 3:4 Image'}
+                        </span>
+                      )}
+                      {category.is_warm_chapter && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          category.warm_image_url ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700 animate-pulse'
+                        }`}>
+                          🔥 Warm Chapter (#{category.display_order_warm_chapter || 0})
+                          {!category.warm_image_url && ' ⚠️ No 9:16 Image'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 flex-wrap justify-end">
@@ -579,17 +643,38 @@ export default function AdminCategories() {
                   </label>
                 </div>
                 {formData.is_featured_in_focus && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Display Order (0-3)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="3"
-                      value={formData.display_order_in_focus}
-                      onChange={e => setFormData({ ...formData, display_order_in_focus: Number(e.target.value) })}
-                      className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the grid</p>
+                  <div className="space-y-3 mt-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Display Order (0-3)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="3"
+                        value={formData.display_order_in_focus}
+                        onChange={e => setFormData({ ...formData, display_order_in_focus: Number(e.target.value) })}
+                        className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the grid</p>
+                    </div>
+
+                    {/* 3:4 Aspect Ratio Collections in Focus Image Upload */}
+                    <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                          Collections in Focus Image (3:4 Portrait Ratio) *
+                        </span>
+                        <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                          * Required for Focus
+                        </span>
+                      </div>
+                      <FileUpload
+                        label="Collection in Focus Card Image (3:4 Ratio)"
+                        helperText="Used specifically for Collections in Focus homepage cards. Optimal 1200×1600 (3:4) portrait."
+                        aspectRatio="3:4"
+                        value={formData.focus_image_url}
+                        onChange={(val) => setFormData({ ...formData, focus_image_url: val as string })}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -616,17 +701,38 @@ export default function AdminCategories() {
                   </label>
                 </div>
                 {formData.is_warm_chapter && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">Display Order (0-9)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="9"
-                      value={formData.display_order_warm_chapter}
-                      onChange={e => setFormData({ ...formData, display_order_warm_chapter: Number(e.target.value) })}
-                      className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the carousel</p>
+                  <div className="space-y-3 mt-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Display Order (0-9)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="9"
+                        value={formData.display_order_warm_chapter}
+                        onChange={e => setFormData({ ...formData, display_order_warm_chapter: Number(e.target.value) })}
+                        className="w-24 px-3 py-2 border-2 rounded-xl focus:outline-none focus:border-black"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Lower numbers appear first in the carousel</p>
+                    </div>
+
+                    {/* 9:16 Aspect Ratio Warm Chapter Image Upload */}
+                    <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                          Warm Chapter Image (9:16 Vertical Ratio) *
+                        </span>
+                        <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                          * Required for Warm Chapter
+                        </span>
+                      </div>
+                      <FileUpload
+                        label="Warm Chapter Carousel Card Image (9:16 Ratio)"
+                        helperText="Used specifically for Warm Chapter homepage carousel cards. Optimal 1080×1920 (9:16) vertical."
+                        aspectRatio="9:16"
+                        value={formData.warm_image_url}
+                        onChange={(val) => setFormData({ ...formData, warm_image_url: val as string })}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -653,3 +759,4 @@ export default function AdminCategories() {
     </div>
   );
 }
+  

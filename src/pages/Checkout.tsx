@@ -1228,9 +1228,23 @@ export default function Checkout() {
                 </div>
 
                 {couponApplied && (
-                  <p className="text-xs text-emerald-600 font-bold uppercase tracking-wider mt-2">
-                    ✓ Coupon "{couponCode}" applied (-Rs. {discount.toLocaleString()})
-                  </p>
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded mt-2">
+                    <p className="text-xs text-emerald-800 font-bold uppercase tracking-wider">
+                      ✓ Coupon "{couponCode}" applied (-Rs. {discount.toLocaleString()})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCouponApplied(false);
+                        setDiscount(0);
+                        setCouponCode('');
+                        setCouponError('');
+                      }}
+                      className="text-[11px] text-red-600 hover:text-red-800 font-semibold underline cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 )}
                 {couponError && (
                   <p className="text-xs text-red-600 font-medium mt-2">

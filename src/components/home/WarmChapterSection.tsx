@@ -60,27 +60,31 @@ export default function WarmChapterSection() {
   // Compute dynamic cards prioritizing active warm chapters or active categories
   const displayCards = useMemo(() => {
     if (categories && categories.length > 0) {
-      const warmCats = categories.filter((c) => c.is_warm_chapter && c.is_active !== false);
+      const warmCats = categories
+        .filter((c) => c.is_warm_chapter && c.is_active !== false)
+        .sort((a, b) => (a.display_order_warm_chapter || 0) - (b.display_order_warm_chapter || 0));
       if (warmCats.length > 0) {
         return warmCats.map((c) => ({
           id: c.id,
           title: c.name,
           subtitle: c.tag || c.badge || 'WINTER DROP',
           slug: c.slug,
-          image_url: c.cover_image_url || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
+          image_url: c.warm_image_url || c.cover_image_url || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
         }));
       }
     }
 
     if (warmChapters && warmChapters.length > 0) {
-      const activeChapters = warmChapters.filter((wc: any) => wc.is_active !== false);
+      const activeChapters = warmChapters
+        .filter((wc: any) => wc.is_active !== false)
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
       if (activeChapters.length > 0) {
         return activeChapters.map((wc) => ({
           id: wc.id,
           title: wc.title,
           subtitle: wc.subtitle || 'NEW EDIT',
           slug: wc.slug,
-          image_url: wc.image_url || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
+          image_url: (wc as any).warm_image_url || wc.image_url || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
         }));
       }
     }
@@ -93,7 +97,7 @@ export default function WarmChapterSection() {
           title: c.name,
           subtitle: c.tag || c.badge || 'WINTER DROP',
           slug: c.slug,
-          image_url: c.cover_image_url || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
+          image_url: c.warm_image_url || c.cover_image_url || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop',
         }));
       }
     }

@@ -147,6 +147,8 @@ export interface Category {
   // Warm Chapters fields
   is_warm_chapter?: boolean;
   display_order_warm_chapter?: number;
+  warm_image_url?: string | null;
+  focus_image_url?: string | null;
 }
 
 export interface WarmChapter {

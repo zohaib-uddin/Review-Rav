@@ -5,7 +5,7 @@ import { adminToast } from '../../utils/notifications';
 interface FileUploadProps {
   label?: string;
   helperText?: string;
-  aspectRatio?: '16:9' | 'square' | 'any';
+  aspectRatio?: '16:9' | '9:16' | '3:4' | 'square' | 'any';
   multiple?: boolean;
   value?: string | string[];
   onChange: (value: string | string[]) => void;
@@ -18,7 +18,7 @@ interface FileUploadProps {
  */
 async function compressImageFile(
   file: File,
-  aspectRatio: '16:9' | 'square' | 'any'
+  aspectRatio: '16:9' | '9:16' | '3:4' | 'square' | 'any'
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
@@ -38,6 +38,12 @@ async function compressImageFile(
         if (aspectRatio === '16:9') {
           maxW = 1920;
           maxH = 1080;
+        } else if (aspectRatio === '9:16') {
+          maxW = 1080;
+          maxH = 1920;
+        } else if (aspectRatio === '3:4') {
+          maxW = 1200;
+          maxH = 1600;
         } else if (aspectRatio === 'square') {
           maxW = 1400;
           maxH = 1400;
@@ -74,7 +80,6 @@ async function compressImageFile(
         resolve(dataUrl);
       } catch (canvasErr) {
         console.warn('Canvas compression failed, falling back to direct read:', canvasErr);
-        // Fallback to direct read if canvas fails
         const reader = new FileReader();
         reader.onload = (e) => resolve((e.target?.result as string) || '');
         reader.onerror = () => reject(new Error('Failed to read file'));
@@ -107,6 +112,8 @@ export default function FileUpload({
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
+  const [inputUrl, setInputUrl] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
 
   const images: string[] = multiple
     ? Array.isArray(value) ? value : value ? [value] : []
@@ -146,6 +153,19 @@ export default function FileUpload({
     }
   };
 
+  const handleAddUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputUrl.trim()) return;
+    if (multiple) {
+      onChange([...images, inputUrl.trim()]);
+    } else {
+      onChange(inputUrl.trim());
+    }
+    setInputUrl('');
+    setShowUrlInput(false);
+    adminToast.success('Image URL Set', 'URL saved for image.');
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -168,6 +188,38 @@ export default function FileUpload({
     onChange([target, ...rest]);
   };
 
+  const getAspectBadge = () => {
+    if (aspectRatio === '16:9') {
+      return (
+        <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full">
+          16:9 Landscape Banner
+        </span>
+      );
+    }
+    if (aspectRatio === '9:16') {
+      return (
+        <span className="text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-300 px-2 py-0.5 rounded-full">
+          9:16 Warm Chapter Vertical
+        </span>
+      );
+    }
+    if (aspectRatio === '3:4') {
+      return (
+        <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-full">
+          3:4 Collection Focus Portrait
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const getAspectClass = () => {
+    if (aspectRatio === '16:9') return 'aspect-[16/9] w-full';
+    if (aspectRatio === '9:16') return 'aspect-[9/16] w-48 mx-auto';
+    if (aspectRatio === '3:4') return 'aspect-[3/4] w-52 mx-auto';
+    return 'aspect-video w-full';
+  };
+
   return (
     <div className={`space-y-3 ${className}`}>
       {label && (
@@ -175,11 +227,7 @@ export default function FileUpload({
           <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
             {label}
           </label>
-          {aspectRatio === '16:9' && (
-            <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full">
-              16:9 Hero Banner Ratio
-            </span>
-          )}
+          {getAspectBadge()}
         </div>
       )}
 
@@ -222,6 +270,16 @@ export default function FileUpload({
               Optimal: 1920×1080 (16:9) landscape for collection hero section & mega menu
             </p>
           )}
+          {aspectRatio === '9:16' && (
+            <p className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-md mt-2 border border-purple-200">
+              Optimal: 1080×1920 (9:16) portrait for Warm Chapter homepage cards
+            </p>
+          )}
+          {aspectRatio === '3:4' && (
+            <p className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md mt-2 border border-emerald-200">
+              Optimal: 1200×1600 (3:4) portrait for Collections in Focus homepage cards
+            </p>
+          )}
           {isProcessing && (
             <div className="flex items-center gap-2 mt-3 px-3.5 py-1.5 bg-neutral-900 text-white rounded-lg text-xs font-semibold shadow-sm animate-pulse">
               <Loader2 size={14} className="animate-spin text-amber-400" />
@@ -231,36 +289,63 @@ export default function FileUpload({
         </div>
       </div>
 
-      {helperText && <p className="text-xs text-gray-500">{helperText}</p>}
+      {/* Alternative: Enter URL */}
+      <div className="flex items-center justify-between text-xs">
+        <button
+          type="button"
+          onClick={() => setShowUrlInput(!showUrlInput)}
+          className="text-xs font-semibold text-neutral-600 hover:text-black underline cursor-pointer"
+        >
+          {showUrlInput ? 'Hide URL input' : 'Or paste direct image URL'}
+        </button>
+        {helperText && <p className="text-xs text-gray-500">{helperText}</p>}
+      </div>
 
-      {/* Single Image 16:9 Preview */}
+      {showUrlInput && (
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={inputUrl}
+            onChange={(e) => setInputUrl(e.target.value)}
+            placeholder="https://images.unsplash.com/..."
+            className="flex-1 px-3 py-2 border rounded-xl text-xs focus:outline-none focus:border-black"
+          />
+          <button
+            type="button"
+            onClick={handleAddUrl}
+            className="px-4 py-2 bg-black text-white text-xs font-bold rounded-xl hover:bg-neutral-800"
+          >
+            Apply URL
+          </button>
+        </div>
+      )}
+
+      {/* Single Image Preview */}
       {!multiple && images.length > 0 && (
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-              {aspectRatio === '16:9' ? '16:9 Hero Banner Preview' : 'Uploaded Image Preview'}
+              {aspectRatio === '16:9' ? '16:9 Banner Preview' : aspectRatio === '9:16' ? '9:16 Warm Chapter Preview' : aspectRatio === '3:4' ? '3:4 Collections in Focus Preview' : 'Image Preview'}
             </span>
             <button
               type="button"
               onClick={() => removeImage(0)}
-              className="text-xs text-red-600 hover:text-red-800 font-bold flex items-center gap-1"
+              className="text-xs text-red-600 hover:text-red-800 font-bold flex items-center gap-1 cursor-pointer"
             >
               <X size={13} /> Remove
             </button>
           </div>
           <div
-            className={`relative rounded-xl overflow-hidden border border-gray-200 bg-neutral-900 shadow-sm ${
-              aspectRatio === '16:9' ? 'aspect-[16/9]' : 'aspect-video'
-            }`}
+            className={`relative rounded-xl overflow-hidden border border-gray-200 bg-neutral-900 shadow-sm ${getAspectClass()}`}
           >
             <img
               src={images[0]}
-              alt="Category Banner"
+              alt="Preview"
               className="w-full h-full object-cover"
             />
-            {aspectRatio === '16:9' && (
+            {aspectRatio !== 'any' && (
               <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm text-white text-[10px] font-mono px-2 py-0.5 rounded">
-                16:9
+                {aspectRatio}
               </div>
             )}
           </div>
@@ -297,7 +382,7 @@ export default function FileUpload({
                   <button
                     type="button"
                     onClick={() => setAsMain(idx)}
-                    className="absolute top-1.5 left-1.5 bg-white/90 hover:bg-black hover:text-white text-black text-[9px] font-bold px-1.5 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-1.5 left-1.5 bg-white/90 hover:bg-black hover:text-white text-black text-[9px] font-bold px-1.5 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   >
                     Set Main
                   </button>
@@ -307,7 +392,7 @@ export default function FileUpload({
                 <button
                   type="button"
                   onClick={() => removeImage(idx)}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow hover:bg-red-700"
+                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow hover:bg-red-700 cursor-pointer"
                   title="Remove image"
                 >
                   <X size={12} />

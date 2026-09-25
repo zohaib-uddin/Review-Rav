@@ -84,13 +84,13 @@ export default function CollectionsInFocus() {
     },
   ];
 
-  const fromFeatured = (featuredCategories || []).filter(
-    (c) => c.is_active !== false && c.is_featured_in_focus !== false
-  );
+  const fromFeatured = (featuredCategories || [])
+    .filter((c) => c.is_active !== false && c.is_featured_in_focus !== false)
+    .sort((a, b) => (a.display_order_in_focus || 0) - (b.display_order_in_focus || 0));
 
-  const fromStoreCats = (categories || []).filter(
-    (c) => c.is_active !== false && c.is_featured_in_focus !== false
-  );
+  const fromStoreCats = (categories || [])
+    .filter((c) => c.is_active !== false && c.is_featured_in_focus !== false)
+    .sort((a, b) => (a.display_order_in_focus || 0) - (b.display_order_in_focus || 0));
 
   const activeCandidates = fromFeatured.length > 0 
     ? fromFeatured 
@@ -98,7 +98,8 @@ export default function CollectionsInFocus() {
 
   const finalCards = activeCandidates.slice(0, 4).map((c, i) => ({
     ...c,
-    cover_image_url: c.cover_image_url || curatedDefaults[i % curatedDefaults.length].cover_image_url,
+    focus_image_url: c.focus_image_url || c.cover_image_url || curatedDefaults[i % curatedDefaults.length].cover_image_url,
+    cover_image_url: c.focus_image_url || c.cover_image_url || curatedDefaults[i % curatedDefaults.length].cover_image_url,
     description: c.description || curatedDefaults[i % curatedDefaults.length].description,
     badge: c.badge || curatedDefaults[i % curatedDefaults.length].badge,
   }));
@@ -237,7 +238,7 @@ export default function CollectionsInFocus() {
                           initial="hidden"
                           whileInView="visible"
                           viewport={{ once: true }}
-                          src={category.cover_image_url || 'https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=800&h=1000&fit=crop'}
+                          src={category.focus_image_url || category.cover_image_url || 'https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=800&h=1000&fit=crop'}
                           alt={category.name}
                           className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
                         />

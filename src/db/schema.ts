@@ -19,6 +19,8 @@ export const categories = pgTable('categories', {
   // Warm Chapters fields
   is_warm_chapter: boolean('is_warm_chapter').notNull().default(false),
   display_order_warm_chapter: integer('display_order_warm_chapter').notNull().default(0),
+  warm_image_url: text('warm_image_url'),
+  focus_image_url: text('focus_image_url'),
   created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

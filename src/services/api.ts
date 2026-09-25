@@ -252,7 +252,38 @@ class ApiService {
     });
   }
 
-  // Discounts
+  // Discounts & Coupons
+  async getCoupons() {
+    return this.request<any[]>('/coupons');
+  }
+
+  async createCoupon(data: any) {
+    return this.request<any>('/coupons', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCoupon(idOrCode: string, data: any) {
+    return this.request<any>(`/coupons/${encodeURIComponent(idOrCode)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCoupon(idOrCode: string) {
+    return this.request<any>(`/coupons/${encodeURIComponent(idOrCode)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async validateCoupon(code: string, orderAmount: number) {
+    return this.request<any>('/validate-coupon', {
+      method: 'POST',
+      body: JSON.stringify({ code, orderAmount }),
+    });
+  }
+
   async validateDiscount(code: string) {
     return this.request<any>(`/discounts/validate?code=${code}`);
   }

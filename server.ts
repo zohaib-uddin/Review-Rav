@@ -27,6 +27,8 @@ interface Category {
   badge?: string | null;
   tag?: string | null;
   cover_image_url?: string;
+  warm_image_url?: string;
+  focus_image_url?: string;
   sort_order: number;
   is_active: boolean;
   is_featured_in_focus: boolean;
@@ -150,12 +152,18 @@ interface JournalEntry {
 }
 
 interface Coupon {
+  id?: string;
   code: string;
   discount_type: 'percentage' | 'fixed';
   discount_value: number;
   min_order_amount: number;
   max_discount?: number;
+  usage_limit?: number;
+  used_count?: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
   is_active: boolean;
+  created_at?: string;
 }
 
 // Initial Categories Seed
@@ -1121,6 +1129,78 @@ async function syncStoresFromNeon() {
       try {
         await sql`ALTER TABLE journal_entries ALTER COLUMN featured_image TYPE text`;
       } catch (_) {}
+
+      // Automatically ensure categories warm_image_url and focus_image_url columns exist
+      try {
+        await sql`ALTER TABLE categories ADD COLUMN IF NOT EXISTS warm_image_url text`;
+      } catch (_) {}
+      try {
+        await sql`ALTER TABLE categories ADD COLUMN IF NOT EXISTS focus_image_url text`;
+      } catch (_) {}
+
+      // Automatically ensure coupon_codes table exists with all required columns
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS coupon_codes (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            code varchar(50) NOT NULL UNIQUE,
+            discount_type varchar(20) NOT NULL,
+            discount_value numeric(10, 2) NOT NULL,
+            min_order_amount numeric(10, 2),
+            max_discount numeric(10, 2),
+            usage_limit integer,
+            used_count integer DEFAULT 0 NOT NULL,
+            starts_at timestamp with time zone,
+            ends_at timestamp with time zone,
+            is_active boolean DEFAULT true NOT NULL,
+            created_at timestamp with time zone DEFAULT now() NOT NULL
+          )
+        `;
+        await sql`CREATE INDEX IF NOT EXISTS coupon_codes_active_idx ON coupon_codes (is_active)`;
+        await sql`CREATE INDEX IF NOT EXISTS coupon_codes_code_idx ON coupon_codes (code)`;
+        await sql`ALTER TABLE coupon_codes ADD COLUMN IF NOT EXISTS max_discount numeric(10, 2)`;
+        await sql`ALTER TABLE coupon_codes ADD COLUMN IF NOT EXISTS usage_limit integer`;
+        await sql`ALTER TABLE coupon_codes ADD COLUMN IF NOT EXISTS used_count integer DEFAULT 0 NOT NULL`;
+        await sql`ALTER TABLE coupon_codes ADD COLUMN IF NOT EXISTS starts_at timestamp with time zone`;
+        await sql`ALTER TABLE coupon_codes ADD COLUMN IF NOT EXISTS ends_at timestamp with time zone`;
+      } catch (cpTblErr: any) {
+        console.warn('Coupon codes table check note:', cpTblErr.message);
+      }
+
+      // Sync coupons from Neon DB
+      try {
+        const dbCoupons = await sql`SELECT * FROM coupon_codes ORDER BY created_at DESC`;
+        if (dbCoupons && dbCoupons.length > 0) {
+          couponsStore = dbCoupons.map((c: any) => ({
+            id: c.id,
+            code: c.code,
+            discount_type: c.discount_type,
+            discount_value: Number(c.discount_value),
+            min_order_amount: c.min_order_amount ? Number(c.min_order_amount) : 0,
+            max_discount: c.max_discount ? Number(c.max_discount) : undefined,
+            usage_limit: c.usage_limit ? Number(c.usage_limit) : undefined,
+            used_count: Number(c.used_count || 0),
+            starts_at: c.starts_at ? new Date(c.starts_at).toISOString() : null,
+            ends_at: c.ends_at ? new Date(c.ends_at).toISOString() : null,
+            is_active: c.is_active !== false,
+            created_at: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
+          }));
+          console.log(`✅ Loaded ${couponsStore.length} coupons from Neon DB`);
+        } else {
+          // Seed initial coupons into database if empty
+          for (const ic of initialCoupons) {
+            try {
+              await sql`
+                INSERT INTO coupon_codes (code, discount_type, discount_value, min_order_amount, is_active)
+                VALUES (${ic.code}, ${ic.discount_type}, ${ic.discount_value}, ${ic.min_order_amount || 0}, ${ic.is_active})
+                ON CONFLICT (code) DO NOTHING
+              `;
+            } catch (_) {}
+          }
+        }
+      } catch (cFetchErr: any) {
+        console.warn('Coupon codes fetch note:', cFetchErr.message);
+      }
     } catch (tblErr: any) {
       console.warn('Neon tables check note:', tblErr.message);
     }
@@ -2305,11 +2385,11 @@ app.use((err: any, req: any, res: any, next: any) => {
         try {
           const rows = await sql`
             INSERT INTO categories (
-              name, slug, description, badge, tag, cover_image_url, parent_id, sort_order,
+              name, slug, description, badge, tag, cover_image_url, warm_image_url, focus_image_url, parent_id, sort_order,
               is_active, is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter
             ) VALUES (
               ${name}, ${slug}, ${b.description || ''}, ${b.badge || null}, ${b.tag || null},
-              ${b.cover_image_url || null}, ${parentId}, ${sortOrder},
+              ${b.cover_image_url || null}, ${b.warm_image_url || null}, ${b.focus_image_url || null}, ${parentId}, ${sortOrder},
               ${isActive}, ${isFeatured}, ${displayOrderInFocus},
               ${isWarmChapter}, ${displayOrderWarmChapter}
             )
@@ -2324,11 +2404,11 @@ app.use((err: any, req: any, res: any, next: any) => {
             const uniqueSlug = `${slug}-${Date.now().toString().slice(-4)}`;
             const rows = await sql`
               INSERT INTO categories (
-                name, slug, description, badge, tag, cover_image_url, parent_id, sort_order,
+                name, slug, description, badge, tag, cover_image_url, warm_image_url, focus_image_url, parent_id, sort_order,
                 is_active, is_featured_in_focus, display_order_in_focus, is_warm_chapter, display_order_warm_chapter
               ) VALUES (
                 ${name}, ${uniqueSlug}, ${b.description || ''}, ${b.badge || null}, ${b.tag || null},
-                ${b.cover_image_url || null}, ${parentId}, ${sortOrder},
+                ${b.cover_image_url || null}, ${b.warm_image_url || null}, ${b.focus_image_url || null}, ${parentId}, ${sortOrder},
                 ${isActive}, ${isFeatured}, ${displayOrderInFocus},
                 ${isWarmChapter}, ${displayOrderWarmChapter}
               )
@@ -2350,6 +2430,8 @@ app.use((err: any, req: any, res: any, next: any) => {
           badge: b.badge || null,
           tag: b.tag || null,
           cover_image_url: b.cover_image_url || '',
+          warm_image_url: b.warm_image_url || '',
+          focus_image_url: b.focus_image_url || '',
           parent_id: parentId,
           sort_order: sortOrder,
           is_active: isActive,
@@ -2390,6 +2472,8 @@ app.use((err: any, req: any, res: any, next: any) => {
               badge = ${b.badge !== undefined ? b.badge : sql`badge`},
               tag = ${b.tag !== undefined ? b.tag : sql`tag`},
               cover_image_url = ${b.cover_image_url !== undefined ? (b.cover_image_url || null) : sql`cover_image_url`},
+              warm_image_url = ${b.warm_image_url !== undefined ? (b.warm_image_url || null) : sql`warm_image_url`},
+              focus_image_url = ${b.focus_image_url !== undefined ? (b.focus_image_url || null) : sql`focus_image_url`},
               parent_id = ${parentId !== undefined ? parentId : sql`parent_id`},
               sort_order = COALESCE(${b.sort_order !== undefined ? Number(b.sort_order) : null}, sort_order),
               is_active = COALESCE(${b.is_active !== undefined ? Boolean(b.is_active) : null}, is_active),
@@ -2873,6 +2957,19 @@ app.use((err: any, req: any, res: any, next: any) => {
             createdOrderId = inserted[0].id;
           }
 
+          // If a discount coupon was applied, increment used_count in coupon_codes table
+          if (discountCode) {
+            try {
+              await sql`
+                UPDATE coupon_codes
+                SET used_count = used_count + 1
+                WHERE UPPER(code) = UPPER(${discountCode.trim()})
+              `;
+            } catch (cErr: any) {
+              console.warn('Coupon used_count increment note:', cErr.message);
+            }
+          }
+
           // Always sync phone from checkout into users profile
           if (dbUserId && shippingAddress.phone) {
             try {
@@ -2956,6 +3053,13 @@ app.use((err: any, req: any, res: any, next: any) => {
       };
 
       ordersStore.unshift(newOrder as any);
+
+      if (discountCode) {
+        const found = couponsStore.find(c => c.code.toUpperCase() === discountCode.trim().toUpperCase());
+        if (found) {
+          found.used_count = (found.used_count || 0) + 1;
+        }
+      }
 
       // Auto-save shipping address to user's address book for permanent persistence
       if (shippingAddress && (rawUserId || orderEmail)) {
@@ -4211,75 +4315,392 @@ app.use((err: any, req: any, res: any, next: any) => {
   app.post('/api/verify-otp', handleVerifyOtpLogic);
   app.post('/api/auth/verify-otp', handleVerifyOtpLogic);
 
-  // ==================== COUPONS ====================
-  app.post('/api/validate-coupon', (req, res) => {
-    const { code, orderAmount } = req.body;
-    if (!code) {
-      return res.status(400).json({ valid: false, message: 'Coupon code required' });
-    }
-
-    const coupon = couponsStore.find(
-      (c) => c.code.toUpperCase() === code.trim().toUpperCase() && c.is_active
-    );
-
-    if (!coupon) {
-      return res.json({ valid: false, message: 'Invalid or expired coupon code' });
-    }
-
-    const amt = Number(orderAmount) || 0;
-    if (amt < coupon.min_order_amount) {
-      return res.json({
-        valid: false,
-        message: `Minimum order amount of Rs. ${coupon.min_order_amount} required`,
-      });
-    }
-
-    let discount = 0;
-    if (coupon.discount_type === 'percentage') {
-      discount = (amt * coupon.discount_value) / 100;
-      if (coupon.max_discount && discount > coupon.max_discount) {
-        discount = coupon.max_discount;
+  // ==================== COUPONS (coupon_codes table) ====================
+  app.post('/api/validate-coupon', async (req, res) => {
+    try {
+      const { code, orderAmount } = req.body;
+      if (!code || typeof code !== 'string' || !code.trim()) {
+        return res.status(400).json({ valid: false, message: 'Coupon code is required' });
       }
-    } else {
-      discount = coupon.discount_value;
+
+      const cleanCode = code.trim().toUpperCase();
+      let coupon: any = null;
+
+      if (sql) {
+        try {
+          const rows = await sql`
+            SELECT id, code, discount_type, discount_value, min_order_amount, max_discount,
+                   usage_limit, used_count, starts_at, ends_at, is_active
+            FROM coupon_codes
+            WHERE UPPER(code) = ${cleanCode}
+            LIMIT 1
+          `;
+          if (rows && rows.length > 0) {
+            coupon = rows[0];
+          }
+        } catch (dbErr: any) {
+          console.warn('Coupon lookup database warning:', dbErr.message);
+        }
+      }
+
+      if (!coupon) {
+        coupon = couponsStore.find((c) => c.code.toUpperCase() === cleanCode);
+      }
+
+      if (!coupon) {
+        return res.json({ valid: false, message: 'Invalid coupon code' });
+      }
+
+      if (!coupon.is_active) {
+        return res.json({ valid: false, message: 'This coupon code is currently disabled or inactive' });
+      }
+
+      const now = new Date();
+
+      // Check starts_at
+      if (coupon.starts_at) {
+        const startsAt = new Date(coupon.starts_at);
+        if (!isNaN(startsAt.getTime()) && now < startsAt) {
+          return res.json({
+            valid: false,
+            message: `Coupon is not active yet (starts on ${startsAt.toLocaleDateString()})`,
+          });
+        }
+      }
+
+      // Check expiry (ends_at)
+      if (coupon.ends_at) {
+        const endsAt = new Date(coupon.ends_at);
+        if (!isNaN(endsAt.getTime()) && now > endsAt) {
+          return res.json({
+            valid: false,
+            message: `This coupon code expired on ${endsAt.toLocaleDateString()}`,
+          });
+        }
+      }
+
+      // Check usage_limit vs used_count
+      const usedCount = Number(coupon.used_count || 0);
+      const usageLimit = coupon.usage_limit != null ? Number(coupon.usage_limit) : null;
+      if (usageLimit !== null && usageLimit > 0 && usedCount >= usageLimit) {
+        return res.json({
+          valid: false,
+          message: 'Coupon usage limit has been reached',
+        });
+      }
+
+      // Check min_order_amount
+      const amt = Number(orderAmount) || 0;
+      const minOrder = Number(coupon.min_order_amount || 0);
+      if (minOrder > 0 && amt < minOrder) {
+        return res.json({
+          valid: false,
+          message: `Minimum order amount of Rs. ${minOrder.toLocaleString()} required to use this coupon`,
+        });
+      }
+
+      const discVal = Number(coupon.discount_value) || 0;
+      let discount = 0;
+
+      if (coupon.discount_type === 'percentage') {
+        discount = (amt * discVal) / 100;
+        const maxDisc = coupon.max_discount != null ? Number(coupon.max_discount) : null;
+        if (maxDisc !== null && maxDisc > 0 && discount > maxDisc) {
+          discount = maxDisc;
+        }
+      } else {
+        discount = Math.min(amt, discVal);
+      }
+
+      res.json({
+        valid: true,
+        discount: Math.round(discount),
+        coupon: {
+          id: coupon.id,
+          code: coupon.code,
+          type: coupon.discount_type,
+          value: discVal,
+          min_order_amount: minOrder,
+          max_discount: coupon.max_discount ? Number(coupon.max_discount) : null,
+          usage_limit: usageLimit,
+          used_count: usedCount,
+        },
+      });
+    } catch (err: any) {
+      console.error('Validate coupon error:', err);
+      res.status(500).json({ valid: false, message: 'Error validating coupon: ' + err.message });
     }
-
-    res.json({
-      valid: true,
-      discount: Math.round(discount),
-      coupon: {
-        code: coupon.code,
-        type: coupon.discount_type,
-        value: coupon.discount_value,
-      },
-    });
   });
 
-  app.get('/api/coupons', (req, res) => {
-    res.json(couponsStore);
+  app.get('/api/coupons', async (req, res) => {
+    try {
+      if (sql) {
+        try {
+          const rows = await sql`
+            SELECT id, code, discount_type, discount_value, min_order_amount, max_discount,
+                   usage_limit, used_count, starts_at, ends_at, is_active, created_at
+            FROM coupon_codes
+            ORDER BY created_at DESC
+          `;
+          if (rows && rows.length > 0) {
+            const formatted = rows.map((c: any) => ({
+              id: c.id,
+              code: c.code,
+              discount_type: c.discount_type,
+              discount_value: Number(c.discount_value),
+              min_order_amount: c.min_order_amount ? Number(c.min_order_amount) : 0,
+              max_discount: c.max_discount ? Number(c.max_discount) : null,
+              usage_limit: c.usage_limit ? Number(c.usage_limit) : null,
+              used_count: Number(c.used_count || 0),
+              starts_at: c.starts_at ? new Date(c.starts_at).toISOString() : null,
+              ends_at: c.ends_at ? new Date(c.ends_at).toISOString() : null,
+              is_active: c.is_active !== false,
+              created_at: c.created_at ? new Date(c.created_at).toISOString() : new Date().toISOString(),
+            }));
+            couponsStore = formatted;
+            return res.json(formatted);
+          }
+        } catch (dbErr: any) {
+          console.warn('Coupon get DB warning:', dbErr.message);
+        }
+      }
+      res.json(couponsStore);
+    } catch (err: any) {
+      console.error('Get coupons error:', err);
+      res.status(500).json({ message: 'Error fetching coupons' });
+    }
   });
 
-  app.post('/api/coupons', (req, res) => {
-    const { code, discount_type, discount_value, min_order_amount, is_active } = req.body;
-    if (!code) return res.status(400).json({ message: 'Code is required' });
-    const newCoupon: Coupon = {
-      code: code.trim().toUpperCase(),
-      discount_type: discount_type || 'percentage',
-      discount_value: Number(discount_value) || 10,
-      min_order_amount: Number(min_order_amount) || 0,
-      is_active: is_active !== false,
-    };
-    couponsStore = couponsStore.filter(c => c.code !== newCoupon.code);
-    couponsStore.push(newCoupon);
-    logAdminAudit('Coupon Created/Updated', newCoupon.code, 'Admin', `${newCoupon.discount_type}: ${newCoupon.discount_value}`);
-    res.status(201).json(newCoupon);
+  app.post('/api/coupons', async (req, res) => {
+    try {
+      const {
+        code,
+        discount_type,
+        discount_value,
+        min_order_amount,
+        max_discount,
+        usage_limit,
+        starts_at,
+        ends_at,
+        is_active,
+      } = req.body;
+
+      if (!code || typeof code !== 'string' || !code.trim()) {
+        return res.status(400).json({ message: 'Coupon code is required' });
+      }
+
+      const cleanCode = code.trim().toUpperCase();
+      const discType = discount_type === 'fixed' ? 'fixed' : 'percentage';
+      const discValue = Number(discount_value) || 0;
+      const minOrder = min_order_amount !== undefined && min_order_amount !== '' && min_order_amount !== null
+        ? Number(min_order_amount)
+        : null;
+      const maxDisc = max_discount !== undefined && max_discount !== '' && max_discount !== null
+        ? Number(max_discount)
+        : null;
+      const usageLim = usage_limit !== undefined && usage_limit !== '' && usage_limit !== null
+        ? Math.max(1, parseInt(String(usage_limit), 10))
+        : null;
+      const startsAtVal = starts_at ? new Date(starts_at).toISOString() : null;
+      const endsAtVal = ends_at ? new Date(ends_at).toISOString() : null;
+      const activeVal = is_active !== false;
+
+      let savedCoupon: any = null;
+
+      if (sql) {
+        try {
+          const rows = await sql`
+            INSERT INTO coupon_codes (
+              code, discount_type, discount_value, min_order_amount, max_discount,
+              usage_limit, used_count, starts_at, ends_at, is_active
+            ) VALUES (
+              ${cleanCode}, ${discType}, ${discValue}, ${minOrder}, ${maxDisc},
+              ${usageLim}, 0, ${startsAtVal}, ${endsAtVal}, ${activeVal}
+            )
+            ON CONFLICT (code) DO UPDATE SET
+              discount_type = EXCLUDED.discount_type,
+              discount_value = EXCLUDED.discount_value,
+              min_order_amount = EXCLUDED.min_order_amount,
+              max_discount = EXCLUDED.max_discount,
+              usage_limit = EXCLUDED.usage_limit,
+              starts_at = EXCLUDED.starts_at,
+              ends_at = EXCLUDED.ends_at,
+              is_active = EXCLUDED.is_active
+            RETURNING *
+          `;
+          if (rows && rows.length > 0) {
+            savedCoupon = {
+              id: rows[0].id,
+              code: rows[0].code,
+              discount_type: rows[0].discount_type,
+              discount_value: Number(rows[0].discount_value),
+              min_order_amount: rows[0].min_order_amount ? Number(rows[0].min_order_amount) : 0,
+              max_discount: rows[0].max_discount ? Number(rows[0].max_discount) : null,
+              usage_limit: rows[0].usage_limit ? Number(rows[0].usage_limit) : null,
+              used_count: Number(rows[0].used_count || 0),
+              starts_at: rows[0].starts_at ? new Date(rows[0].starts_at).toISOString() : null,
+              ends_at: rows[0].ends_at ? new Date(rows[0].ends_at).toISOString() : null,
+              is_active: rows[0].is_active !== false,
+              created_at: rows[0].created_at ? new Date(rows[0].created_at).toISOString() : new Date().toISOString(),
+            };
+          }
+        } catch (dbErr: any) {
+          console.error('Neon coupon insert error:', dbErr.message);
+          throw dbErr;
+        }
+      }
+
+      if (!savedCoupon) {
+        savedCoupon = {
+          id: `cpn-${Date.now()}`,
+          code: cleanCode,
+          discount_type: discType,
+          discount_value: discValue,
+          min_order_amount: minOrder || 0,
+          max_discount: maxDisc || undefined,
+          usage_limit: usageLim || undefined,
+          used_count: 0,
+          starts_at: startsAtVal,
+          ends_at: endsAtVal,
+          is_active: activeVal,
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      couponsStore = couponsStore.filter((c) => c.code !== cleanCode);
+      couponsStore.unshift(savedCoupon);
+      logAdminAudit('Coupon Created', cleanCode, 'Admin', `${discType}: ${discValue}`);
+      res.status(201).json(savedCoupon);
+    } catch (err: any) {
+      console.error('Create coupon error:', err);
+      res.status(500).json({ message: 'Error creating coupon: ' + err.message });
+    }
   });
 
-  app.delete('/api/coupons/:code', (req, res) => {
-    const code = req.params.code.toUpperCase();
-    couponsStore = couponsStore.filter(c => c.code !== code);
-    logAdminAudit('Coupon Deleted', code, 'Admin');
-    res.json({ success: true, message: 'Coupon deleted' });
+  app.put('/api/coupons/:idOrCode', async (req, res) => {
+    try {
+      const { idOrCode } = req.params;
+      const b = req.body;
+      const cleanCode = b.code ? b.code.trim().toUpperCase() : undefined;
+      const discType = b.discount_type ? (b.discount_type === 'fixed' ? 'fixed' : 'percentage') : undefined;
+      const discValue = b.discount_value !== undefined ? Number(b.discount_value) : undefined;
+      const minOrder = b.min_order_amount !== undefined
+        ? (b.min_order_amount === '' || b.min_order_amount === null ? null : Number(b.min_order_amount))
+        : undefined;
+      const maxDisc = b.max_discount !== undefined
+        ? (b.max_discount === '' || b.max_discount === null ? null : Number(b.max_discount))
+        : undefined;
+      const usageLim = b.usage_limit !== undefined
+        ? (b.usage_limit === '' || b.usage_limit === null ? null : Math.max(1, parseInt(String(b.usage_limit), 10)))
+        : undefined;
+      const startsAtVal = b.starts_at !== undefined
+        ? (b.starts_at ? new Date(b.starts_at).toISOString() : null)
+        : undefined;
+      const endsAtVal = b.ends_at !== undefined
+        ? (b.ends_at ? new Date(b.ends_at).toISOString() : null)
+        : undefined;
+      const activeVal = b.is_active !== undefined ? Boolean(b.is_active) : undefined;
+
+      let updatedCoupon: any = null;
+
+      if (sql) {
+        try {
+          const rows = await sql`
+            UPDATE coupon_codes SET
+              code = COALESCE(${cleanCode ?? null}, code),
+              discount_type = COALESCE(${discType ?? null}, discount_type),
+              discount_value = COALESCE(${discValue ?? null}, discount_value),
+              min_order_amount = ${minOrder !== undefined ? minOrder : sql`min_order_amount`},
+              max_discount = ${maxDisc !== undefined ? maxDisc : sql`max_discount`},
+              usage_limit = ${usageLim !== undefined ? usageLim : sql`usage_limit`},
+              starts_at = ${startsAtVal !== undefined ? startsAtVal : sql`starts_at`},
+              ends_at = ${endsAtVal !== undefined ? endsAtVal : sql`ends_at`},
+              is_active = COALESCE(${activeVal ?? null}, is_active)
+            WHERE id::text = ${idOrCode} OR UPPER(code) = UPPER(${idOrCode})
+            RETURNING *
+          `;
+          if (rows && rows.length > 0) {
+            updatedCoupon = {
+              id: rows[0].id,
+              code: rows[0].code,
+              discount_type: rows[0].discount_type,
+              discount_value: Number(rows[0].discount_value),
+              min_order_amount: rows[0].min_order_amount ? Number(rows[0].min_order_amount) : 0,
+              max_discount: rows[0].max_discount ? Number(rows[0].max_discount) : null,
+              usage_limit: rows[0].usage_limit ? Number(rows[0].usage_limit) : null,
+              used_count: Number(rows[0].used_count || 0),
+              starts_at: rows[0].starts_at ? new Date(rows[0].starts_at).toISOString() : null,
+              ends_at: rows[0].ends_at ? new Date(rows[0].ends_at).toISOString() : null,
+              is_active: rows[0].is_active !== false,
+              created_at: rows[0].created_at ? new Date(rows[0].created_at).toISOString() : new Date().toISOString(),
+            };
+          }
+        } catch (dbErr: any) {
+          console.error('Neon coupon update error:', dbErr.message);
+          throw dbErr;
+        }
+      }
+
+      if (!updatedCoupon) {
+        const idx = couponsStore.findIndex((c) => c.id === idOrCode || c.code.toUpperCase() === idOrCode.toUpperCase());
+        if (idx !== -1) {
+          couponsStore[idx] = {
+            ...couponsStore[idx],
+            ...(cleanCode ? { code: cleanCode } : {}),
+            ...(discType ? { discount_type: discType } : {}),
+            ...(discValue !== undefined ? { discount_value: discValue } : {}),
+            ...(minOrder !== undefined ? { min_order_amount: minOrder || 0 } : {}),
+            ...(maxDisc !== undefined ? { max_discount: maxDisc || undefined } : {}),
+            ...(usageLim !== undefined ? { usage_limit: usageLim || undefined } : {}),
+            ...(startsAtVal !== undefined ? { starts_at: startsAtVal } : {}),
+            ...(endsAtVal !== undefined ? { ends_at: endsAtVal } : {}),
+            ...(activeVal !== undefined ? { is_active: activeVal } : {}),
+          };
+          updatedCoupon = couponsStore[idx];
+        }
+      } else {
+        const idx = couponsStore.findIndex((c) => c.id === updatedCoupon.id || c.code === updatedCoupon.code);
+        if (idx !== -1) {
+          couponsStore[idx] = updatedCoupon;
+        } else {
+          couponsStore.unshift(updatedCoupon);
+        }
+      }
+
+      if (!updatedCoupon) {
+        return res.status(404).json({ message: 'Coupon not found' });
+      }
+
+      logAdminAudit('Coupon Updated', updatedCoupon.code, 'Admin', `Fields: ${Object.keys(b).join(', ')}`);
+      res.json(updatedCoupon);
+    } catch (err: any) {
+      console.error('Update coupon error:', err);
+      res.status(500).json({ message: 'Error updating coupon: ' + err.message });
+    }
+  });
+
+  app.delete('/api/coupons/:idOrCode', async (req, res) => {
+    try {
+      const { idOrCode } = req.params;
+      if (sql) {
+        try {
+          await sql`
+            DELETE FROM coupon_codes
+            WHERE id::text = ${idOrCode} OR UPPER(code) = UPPER(${idOrCode})
+          `;
+        } catch (dbErr: any) {
+          console.error('Neon delete coupon error:', dbErr.message);
+        }
+      }
+      const existing = couponsStore.find((c) => c.id === idOrCode || c.code.toUpperCase() === idOrCode.toUpperCase());
+      const cCode = existing ? existing.code : idOrCode;
+      couponsStore = couponsStore.filter((c) => c.id !== idOrCode && c.code.toUpperCase() !== idOrCode.toUpperCase());
+      logAdminAudit('Coupon Deleted', cCode, 'Admin');
+      res.json({ success: true, message: 'Coupon deleted successfully' });
+    } catch (err: any) {
+      console.error('Delete coupon error:', err);
+      res.status(500).json({ message: 'Error deleting coupon: ' + err.message });
+    }
   });
 
   // ==================== ADMIN CUSTOMERS ROUTE ====================
