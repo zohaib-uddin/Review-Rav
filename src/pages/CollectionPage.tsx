@@ -429,21 +429,60 @@ fetchPriority={currentHeroIndex === 0 ? "high" : "low"}
         </div>
       </div>
 
-      {/* Products Grid Section (Full width without left sidebar) */}
-      <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {filteredProducts.length > 0 ? (
+      {/* Products Grid Section (Full width edge-to-edge start to end matching Shop All page) */}
+      <div className="w-full px-0 sm:px-1 py-4">
+        {(isLoading && products.length === 0) ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-[4px]">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <motion.div
+                key={`col-skeleton-${i}`}
+                initial={{ opacity: 0.5, scale: 0.96 }}
+                animate={{
+                  opacity: [0.5, 0.85, 0.5],
+                  scale: [0.97, 1, 0.97],
+                }}
+                transition={{
+                  duration: 1.6,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                  delay: (i % 6) * 0.1,
+                }}
+                className="flex flex-col space-y-2 p-1"
+              >
+                <div className="aspect-[9/16] bg-neutral-100 rounded-none overflow-hidden relative border border-neutral-200/50">
+                  <div className="absolute inset-0 bg-gradient-to-t from-neutral-200/70 via-neutral-100/30 to-transparent"></div>
+                </div>
+                <div className="space-y-1 pt-1">
+                  <div className="h-3.5 bg-neutral-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-neutral-200 rounded w-1/3"></div>
+                </div>
+                <div className="h-9 bg-neutral-200 rounded-none w-full mt-1"></div>
+              </motion.div>
+            ))}
+          </div>
+        ) : filteredProducts.length > 0 ? (
           gridDensity === 'dense' ? (
-            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-12 gap-2">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-12 gap-1.5"
+            >
               {filteredProducts.map((product) => (
                 <MiniProductCard key={product.id} product={product} />
               ))}
-            </div>
+            </motion.div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6 gap-[4px]"
+            >
               {filteredProducts.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} fullWidth />
               ))}
-            </div>
+            </motion.div>
           )
         ) : (
           <div className="text-center py-24 bg-neutral-50 border border-dashed border-neutral-200 rounded-xl">

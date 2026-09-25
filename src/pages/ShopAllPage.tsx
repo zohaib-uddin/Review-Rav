@@ -8,7 +8,7 @@ import FilterSidebar, { FilterState } from '../components/collection/FilterSideb
 import ShopAllHero from '../components/ShopAllHero';
 
 export default function ShopAllPage() {
-  const { products, categories, fetchProducts, fetchCategories } = useStore();
+  const { products, categories, isLoading, fetchProducts, fetchCategories } = useStore();
   const [sortBy, setSortBy] = useState('featured');
   const [gridDensity, setGridDensity] = useState<'standard' | 'dense'>('standard');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -258,7 +258,7 @@ export default function ShopAllPage() {
       </div>
 
       {/* Main Content Area: FilterSidebar Component + Dynamic Product Grid */}
-      <div className="w-full px-2 sm:px-4 py-4">
+      <div className="w-full px-0 sm:px-1 py-4">
         <div className="flex items-start gap-4">
           {filtersOpen && (
             <aside className="w-64 sm:w-72 flex-shrink-0 sticky top-[80px] self-start z-20">
@@ -283,27 +283,71 @@ export default function ShopAllPage() {
 
           {/* Dynamic Grid Layout */}
           <div className="flex-1 min-w-0">
-            {filteredProducts.length > 0 ? (
+            {(isLoading && products.length === 0) ? (
+              /* Loading Skeleton Grid matching 9:16 aspect ratio */
+              <div
+                className={`grid ${
+                  filtersOpen
+                    ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+                    : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6'
+                } gap-[4px]`}
+              >
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <motion.div
+                    key={`shop-all-skeleton-${i}`}
+                    initial={{ opacity: 0.5, scale: 0.96 }}
+                    animate={{
+                      opacity: [0.5, 0.85, 0.5],
+                      scale: [0.97, 1, 0.97],
+                    }}
+                    transition={{
+                      duration: 1.6,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                      delay: (i % 6) * 0.1,
+                    }}
+                    className="flex flex-col space-y-2 p-1"
+                  >
+                    <div className="aspect-[9/16] bg-neutral-100 rounded-none overflow-hidden relative border border-neutral-200/50">
+                      <div className="absolute inset-0 bg-gradient-to-t from-neutral-200/70 via-neutral-100/30 to-transparent"></div>
+                    </div>
+                    <div className="space-y-1 pt-1">
+                      <div className="h-3.5 bg-neutral-200 rounded w-3/4"></div>
+                      <div className="h-3 bg-neutral-200 rounded w-1/3"></div>
+                    </div>
+                    <div className="h-9 bg-neutral-200 rounded-none w-full mt-1"></div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : filteredProducts.length > 0 ? (
               gridDensity === 'dense' ? (
                 /* Dense Mini Grid: ~15 cards per row on large desktop */
-                <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-12 2xl:grid-cols-[repeat(15,minmax(0,1fr))] gap-1.5">
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-12 2xl:grid-cols-[repeat(15,minmax(0,1fr))] gap-1.5"
+                >
                   {filteredProducts.map((product) => (
                     <MiniProductCard key={product.id} product={product} />
                   ))}
-                </div>
+                </motion.div>
               ) : (
                 /* Standard Grid: 6 cards per row on 2xl screens */
-                <div
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
                   className={`grid ${
                     filtersOpen
-                      ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                      : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+                      ? 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+                      : 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6'
                   } gap-[4px]`}
                 >
                   {filteredProducts.map((product, i) => (
                     <ProductCard key={product.id} product={product} index={i} fullWidth />
                   ))}
-                </div>
+                </motion.div>
               )
             ) : (
               <div className="text-center py-20 bg-gray-50 border border-dashed border-gray-200">

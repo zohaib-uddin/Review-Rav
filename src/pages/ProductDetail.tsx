@@ -13,6 +13,8 @@ import {
   Minus,
   Plus,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Package,
   Ruler,
@@ -255,19 +257,22 @@ export default function ProductDetail() {
     setTimeout(() => setAddedToCart(false), 3000);
   };
 
-  // Buy Now: Navigates directly to checkout without opening cart sidebar or adding to persistent cart drawer
+  // Buy Now: Navigates directly to checkout with only this single product without adding to cart drawer
   const handleBuyNow = () => {
-    if (!selectedSize) return;
+    const sizeToUse = selectedSize || (product.sizes && product.sizes[0]) || 'M';
     const firstColor = product.colors?.[0] as any;
     const defaultColor =
       typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
-    addToCartWithAnimation(
-      { ...product, price: effectivePrice },
-      selectedSize,
-      selectedColor || defaultColor,
-      quantity
-    );
-    navigate('/checkout');
+    const buyNowItem = {
+      product: { ...product, price: effectivePrice },
+      quantity: quantity || 1,
+      size: sizeToUse,
+      color: selectedColor || defaultColor,
+    };
+    try {
+      sessionStorage.setItem('ravenza_buy_now_item', JSON.stringify(buyNowItem));
+    } catch {}
+    navigate('/checkout', { state: { buyNowItem } });
   };
 
   const toggleSpec = (spec: string) => {
@@ -283,6 +288,22 @@ export default function ProductDetail() {
     Array.isArray(product.images) && product.images.length > 0
       ? product.images
       : [product.image_url || product.image || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=1000&fit=crop'];
+
+  // Keyboard navigation for image zoom modal (Arrow keys & Escape)
+  useEffect(() => {
+    if (!isZoomOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsZoomOpen(false);
+      } else if (e.key === 'ArrowLeft') {
+        setActiveImage((prev) => (prev - 1 + productImages.length) % productImages.length);
+      } else if (e.key === 'ArrowRight') {
+        setActiveImage((prev) => (prev + 1) % productImages.length);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZoomOpen, productImages.length]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -414,7 +435,7 @@ export default function ProductDetail() {
           >
             <div>
               <span className="text-xs font-bold tracking-[0.25em] uppercase text-neutral-400 block mb-1">
-                RAVENZA PREMIUM STREETWEAR
+                RAVENZA
               </span>
               <h1 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-black">
                 {product.name}
@@ -978,21 +999,57 @@ export default function ProductDetail() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsZoomOpen(false)}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs"
           >
             <div className="relative max-w-6xl w-full max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 onClick={() => setIsZoomOpen(false)}
-                className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-20 cursor-pointer"
+                className="absolute top-4 right-4 p-3 bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors z-30 cursor-pointer shadow-lg"
+                title="Close zoom"
               >
-                <X size={24} />
+                <X size={22} />
               </button>
+
+              {/* Left & Right navigation icons with light shadow and transparent background */}
+              {productImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImage((prev) => (prev - 1 + productImages.length) % productImages.length);
+                    }}
+                    className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2 bg-transparent border-0 text-white hover:text-white/80 hover:scale-125 transition-all z-30 cursor-pointer drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft size={42} strokeWidth={2.4} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveImage((prev) => (prev + 1) % productImages.length);
+                    }}
+                    className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2 bg-transparent border-0 text-white hover:text-white/80 hover:scale-125 transition-all z-30 cursor-pointer drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight size={42} strokeWidth={2.4} />
+                  </button>
+                </>
+              )}
+
               <img
                 src={productImages[activeImage]}
                 alt={product.name}
                 className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
               />
+
+              {productImages.length > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-xs text-white text-[11px] font-mono font-bold px-3 py-1 rounded-full pointer-events-none">
+                  {activeImage + 1} / {productImages.length}
+                </div>
+              )}
             </div>
           </motion.div>
         )}

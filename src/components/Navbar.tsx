@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
-import { Search, Heart, ShoppingBag, User, Menu, X, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Heart, ShoppingBag, User, Menu, X, Shield, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useCart } from '../context/CartContext';
 import MegaMenu from './MegaMenu';
 import SearchModal from './SearchModal';
+import logoImg from '../images/logo.svg';
 
 const announcementSlides = [
   "Flat 10% OFF on Online Payments 💳",
@@ -24,6 +25,28 @@ export default function Navbar() {
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const { scrollY } = useScroll();
   const logoRef = useRef<HTMLDivElement>(null);
+
+  // On home page, wait for intro flying logo to dock before showing the static navbar logo
+  const [isIntroFlying, setIsIntroFlying] = useState(() => {
+    return typeof window !== 'undefined' && window.location.pathname === '/';
+  });
+
+  useEffect(() => {
+    const handleIntroDocked = () => {
+      setIsIntroFlying(false);
+    };
+    window.addEventListener('intro-logo-docked', handleIntroDocked);
+
+    // Fallback in case intro is skipped or on other route navigation
+    const fallback = setTimeout(() => {
+      setIsIntroFlying(false);
+    }, 3500);
+
+    return () => {
+      window.removeEventListener('intro-logo-docked', handleIntroDocked);
+      clearTimeout(fallback);
+    };
+  }, []);
   
   // Logo scale based on scroll position
   const logoScale = useTransform(scrollY, [0, 200], [1, 0.85]);
@@ -132,10 +155,10 @@ export default function Navbar() {
       >
         <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className={`flex items-center justify-between transition-all duration-300 ${isScrolled ? 'h-16' : 'h-20'}`}>
-            {/* Left Side - Search Icon (Far Left Corner) */}
-            <div className="flex items-center gap-2">
+            {/* Left Side - Search Icon & Cookie/Privacy Info Icon */}
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
-                className="lg:hidden p-2 hover:bg-gray-100 rounded-full transition-colors"
+                className="lg:hidden p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 aria-label="Toggle navigation menu"
               >
@@ -143,23 +166,37 @@ export default function Navbar() {
               </button>
               <button
                 onClick={() => setIsSearchOpen(true)}
-                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors flex items-center gap-2"
+                className="p-2.5 hover:bg-gray-100 rounded-full transition-colors flex items-center gap-2 cursor-pointer"
                 aria-label="Search"
               >
                 <Search size={20} />
                 <span className="hidden md:inline text-xs font-semibold uppercase tracking-wider text-gray-400">Search</span>
               </button>
+
+              {/* Cookie / Privacy Info Icon with subtle status dot */}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('open-cookie-preferences'))}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors relative cursor-pointer text-neutral-600 hover:text-black flex items-center justify-center"
+                title="Cookie & Privacy Settings"
+                aria-label="Cookie & Privacy Settings"
+              >
+                <Info size={18} />
+              </button>
             </div>
 
-            {/* Center - Logo */}
-            <div className="flex-1 flex items-center justify-center">
-              <Link to="/" className="flex items-center" ref={logoRef}>
-                <motion.h1
-                  style={{ scale: logoScale, fontSize: logoFontSize }}
-                  className="font-black tracking-tighter font-display transition-transform duration-300 origin-center text-center"
-                >
-                  RAVENZA
-                </motion.h1>
+            {/* Center - Transparent Logo Image Imported Through Code */}
+            <div className="flex-1 flex items-center justify-center px-2 min-h-0">
+              <Link to="/" id="navbar-brand-logo" className="flex items-center justify-center p-0 group" ref={logoRef}>
+                <motion.img
+                  id="navbar-brand-logo-img"
+                  src={logoImg}
+                  alt="RAVENZA"
+                  style={{ scale: logoScale }}
+                  className={`h-10 sm:h-12 md:h-[52px] lg:h-[58px] w-auto max-w-[220px] sm:max-w-[270px] md:max-w-[320px] lg:max-w-[360px] object-contain transition-opacity duration-200 group-hover:scale-105 ${
+                    isIntroFlying ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                  }`}
+                />
               </Link>
             </div>
 

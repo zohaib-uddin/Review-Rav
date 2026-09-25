@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CheckCircle, CreditCard, Truck, Mail, Tag, ShoppingBag, 
@@ -31,6 +31,26 @@ const MAJOR_CITIES = [
 export default function Checkout() {
   const { cart, clearCart, addOrder, user } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Support single product instant Buy Now mode: only checkout this specific product without affecting or including other cart items
+  const stateBuyNow = (location.state as any)?.buyNowItem;
+  if (stateBuyNow) {
+    try {
+      sessionStorage.setItem('ravenza_buy_now_item', JSON.stringify(stateBuyNow));
+    } catch {}
+  }
+  const cachedBuyNow = (() => {
+    try {
+      const stored = sessionStorage.getItem('ravenza_buy_now_item');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const buyNowItem = stateBuyNow || cachedBuyNow;
+  const isBuyNow = Boolean(buyNowItem);
+  const checkoutItems = isBuyNow && buyNowItem ? [buyNowItem] : cart;
   
   // Step management
   const [step, setStep] = useState(1);
@@ -133,7 +153,7 @@ export default function Checkout() {
   };
   
   // Calculate totals and tiered dynamic discounts
-  const cartDiscounts = calculateCartDiscounts(cart);
+  const cartDiscounts = calculateCartDiscounts(checkoutItems);
   const subtotal = cartDiscounts.subtotal;
   const autoDiscount = cartDiscounts.autoDiscount; // Flat 10% + Tier 5%/10%
   const totalCombinedDiscount = autoDiscount + discount; // plus manual coupon discount
@@ -296,7 +316,7 @@ export default function Checkout() {
       order_number: `RVZ-${Date.now().toString().slice(-6)}`,
       tracking_id: `TRK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       user_id: user?.id || 'guest',
-      items: cart,
+      items: checkoutItems,
       total,
       subtotal,
       shipping_cost: shipping,
@@ -335,7 +355,13 @@ export default function Checkout() {
 
       addOrder(confirmedOrder);
       setOrderDetails(confirmedOrder);
-      clearCart();
+      if (!isBuyNow) {
+        clearCart();
+      } else {
+        try {
+          sessionStorage.removeItem('ravenza_buy_now_item');
+        } catch {}
+      }
       setOrderPlaced(true);
       frontendToast.orderPlaced(confirmedOrder.order_number);
     } catch (err) {
@@ -348,15 +374,21 @@ export default function Checkout() {
       }
       addOrder(orderPayload as any);
       setOrderDetails(orderPayload);
-      clearCart();
+      if (!isBuyNow) {
+        clearCart();
+      } else {
+        try {
+          sessionStorage.removeItem('ravenza_buy_now_item');
+        } catch {}
+      }
       setOrderPlaced(true);
     } finally {
       setIsSubmittingOrder(false);
     }
   };
 
-  // Redirect if cart is empty and order hasn't been placed
-  if (cart.length === 0 && !orderPlaced) {
+  // Redirect if checkout items are empty and order hasn't been placed
+  if (checkoutItems.length === 0 && !orderPlaced) {
     navigate('/cart');
     return null;
   }
@@ -436,8 +468,18 @@ export default function Checkout() {
       {/* Header */}
       <div className="bg-black text-white py-8 border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
-          <Link to="/cart" className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={16} /> Return to Cart
+          <Link 
+            to={isBuyNow && buyNowItem ? `/products/${buyNowItem.product.slug || buyNowItem.product.id}` : "/cart"} 
+            onClick={() => {
+              if (isBuyNow) {
+                try {
+                  sessionStorage.removeItem('ravenza_buy_now_item');
+                } catch {}
+              }
+            }}
+            className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft size={16} /> {isBuyNow ? 'Return to Product' : 'Return to Cart'}
           </Link>
           <span className="text-xs font-mono uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
             <Lock size={14} className="text-emerald-400" /> Secure 256-Bit Checkout
@@ -448,7 +490,14 @@ export default function Checkout() {
       <div className="max-w-7xl mx-auto px-4 pt-8">
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200">
           <h1 className="text-2xl md:text-3xl font-extrabold uppercase tracking-tight text-black">Checkout</h1>
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{cart.length} item{cart.length > 1 ? 's' : ''}</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            {checkoutItems.length} item{checkoutItems.length > 1 ? 's' : ''}
+            {isBuyNow && (
+              <span className="ml-2 text-[10px] bg-red-600 text-white px-2 py-0.5 uppercase tracking-wider rounded font-black">
+                Direct Buy Now
+              </span>
+            )}
+          </span>
         </div>
 
         {/* Multi-step progress bar */}
@@ -1087,12 +1136,19 @@ export default function Checkout() {
                 <h3 className="text-xs font-bold uppercase tracking-widest text-black flex items-center gap-2">
                   <ShoppingBag size={15} /> Your Order Summary
                 </h3>
-                <span className="text-xs font-bold text-gray-500">{cart.length} item{cart.length > 1 ? 's' : ''}</span>
+                <span className="text-xs font-bold text-gray-500">
+                  {checkoutItems.length} item{checkoutItems.length > 1 ? 's' : ''}
+                  {isBuyNow && (
+                    <span className="ml-2 text-[10px] bg-red-600 text-white px-2 py-0.5 uppercase tracking-wider rounded font-black">
+                      Direct Buy
+                    </span>
+                  )}
+                </span>
               </div>
 
               {/* Items List */}
               <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto pr-1">
-                {cart.map((item, idx) => {
+                {checkoutItems.map((item, idx) => {
                   const actualPrice = Number(item.product.salePrice || item.product.price || item.product.base_price || 0);
                   const comparePrice = Number(item.product.compare_at_price || item.product.compare_price || 0);
                   const hasComparePrice = comparePrice > actualPrice;

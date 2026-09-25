@@ -24,26 +24,48 @@ export default function ShopAllHero() {
     return () => clearInterval(timer);
   }, [nextSlide]);
 
+  // Preload all hero images so transitions are instant
+  useEffect(() => {
+    HERO_IMAGES.forEach((url) => {
+      const img = new Image();
+      img.src = url;
+    });
+  }, []);
+
   return (
-    <div className="relative w-full h-[65vh] sm:h-[75vh] md:h-[80vh] bg-neutral-950 overflow-hidden select-none">
-      {/* Images Carousel */}
-      <AnimatePresence initial={false} mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, scale: 1.03 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-0"
-        >
-          <img
-            src={HERO_IMAGES[currentIndex]}
-            alt={`Shop All Editorial ${currentIndex + 1}`}
-            className="w-full h-full object-cover object-center"
-            loading="eager"
-          />
-        </motion.div>
-      </AnimatePresence>
+    <div className="relative w-full h-[65vh] sm:h-[75vh] md:h-[80vh] bg-neutral-900 overflow-hidden select-none">
+      {/* Images Carousel - Stacked cross-fade without black screen flashes */}
+      <div className="absolute inset-0">
+        {HERO_IMAGES.map((imgUrl, idx) => {
+          const isActive = idx === currentIndex;
+          return (
+            <motion.div
+              key={idx}
+              initial={false}
+              animate={{
+                opacity: isActive ? 1 : 0,
+                scale: isActive ? 1 : 1.04,
+              }}
+              transition={{
+                opacity: { duration: 0.8, ease: [0.25, 1, 0.5, 1] },
+                scale: { duration: 1.2, ease: 'easeOut' },
+              }}
+              style={{
+                zIndex: isActive ? 10 : 0,
+                pointerEvents: isActive ? 'auto' : 'none',
+              }}
+              className="absolute inset-0"
+            >
+              <img
+                src={imgUrl}
+                alt={`Shop All Editorial ${idx + 1}`}
+                className="w-full h-full object-cover object-center"
+                loading="eager"
+              />
+            </motion.div>
+          );
+        })}
+      </div>
 
       {/* Subtle bottom gradient for smooth transition */}
       <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />

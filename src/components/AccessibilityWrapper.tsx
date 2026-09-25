@@ -10,12 +10,11 @@ export default function AccessibilityWrapper({ children }: AccessibilityWrapperP
   const mainContentRef = useRef<HTMLElement>(null);
   const skipLinkRef = useRef<HTMLAnchorElement>(null);
 
-  // Focus management on route change
+  // Focus management and scroll to top on route change
   useEffect(() => {
-    // Move focus to main content on route change
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (mainContentRef.current) {
-      mainContentRef.current.focus();
-      mainContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      mainContentRef.current.focus({ preventScroll: true });
     }
   }, [location.pathname]);
 

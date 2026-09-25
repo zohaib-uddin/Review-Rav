@@ -85,15 +85,18 @@ export function ScrollToTop() {
     <AnimatePresence>
       {isVisible && (
         <motion.button
-          initial={{ opacity: 0, scale: 0.5 }}
+          initial={{ opacity: 0, scale: 0.6 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.5 }}
+          exit={{ opacity: 0, scale: 0.6 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           onClick={scrollToTop}
-          className="fixed bottom-8 right-8 z-50 p-4 bg-black text-white rounded-full shadow-lg hover:bg-gray-800 transition-colors"
+          className="fixed bottom-28 right-[36px] z-40 w-8 h-8 bg-white/80 hover:bg-white text-neutral-800 border border-neutral-300 shadow-md backdrop-blur-xs rounded-full flex items-center justify-center transition-all cursor-pointer"
           aria-label="Scroll to top"
+          title="Scroll to top"
         >
           <svg
-            className="w-6 h-6"
+            className="w-3.5 h-3.5 text-neutral-800"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -101,7 +104,7 @@ export function ScrollToTop() {
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth={2}
+              strokeWidth={2.5}
               d="M5 10l7-7m0 0l7 7m-7-7v18"
             />
           </svg>
@@ -190,58 +193,127 @@ export function Tooltip({
   );
 }
 
-// Cookie Consent Banner
+import CookiePreferencesModal from './CookiePreferencesModal';
+
+// Cookie Consent Banner - Modern Luxury E-Commerce Design
 export function CookieConsent() {
   const [isVisible, setIsVisible] = useState(false);
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
   useEffect(() => {
     const consent = localStorage.getItem('cookie-consent');
     if (!consent) {
-      setIsVisible(true);
+      // Delay slightly for smooth entrance
+      const timer = setTimeout(() => setIsVisible(true), 1200);
+      return () => clearTimeout(timer);
     }
+  }, []);
+
+  // Listen for global open preferences event
+  useEffect(() => {
+    const handleOpenPref = () => setIsPreferencesOpen(true);
+    const handleStatusChange = (e: any) => {
+      if (e.detail) {
+        setIsVisible(false);
+      }
+    };
+    window.addEventListener('open-cookie-preferences', handleOpenPref);
+    window.addEventListener('cookie-consent-change', handleStatusChange);
+    return () => {
+      window.removeEventListener('open-cookie-preferences', handleOpenPref);
+      window.removeEventListener('cookie-consent-change', handleStatusChange);
+    };
   }, []);
 
   const acceptCookies = () => {
     localStorage.setItem('cookie-consent', 'accepted');
+    window.dispatchEvent(new CustomEvent('cookie-consent-change', { detail: 'accepted' }));
     setIsVisible(false);
   };
 
   const declineCookies = () => {
     localStorage.setItem('cookie-consent', 'declined');
+    window.dispatchEvent(new CustomEvent('cookie-consent-change', { detail: 'declined' }));
     setIsVisible(false);
   };
 
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg p-4"
-        >
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-gray-600">
-              We use cookies to enhance your experience. By continuing, you agree to our use of cookies.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={declineCookies}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-              >
-                Decline
-              </button>
-              <button
-                onClick={acceptCookies}
-                className="px-6 py-2 bg-black text-white text-sm rounded-lg hover:bg-gray-800"
-              >
-                Accept
-              </button>
+    <>
+      <AnimatePresence>
+        {isVisible && (
+          <motion.div
+            initial={{ y: 50, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 50, opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+            className="fixed bottom-4 left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-50 bg-white/95 backdrop-blur-md border border-neutral-300/80 shadow-[0_12px_40px_rgba(0,0,0,0.18)] rounded-2xl p-5"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-black text-white flex-shrink-0 flex items-center justify-center shadow-sm">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" />
+                  <path d="M8.5 8.5v.01" />
+                  <path d="M16 15.5v.01" />
+                  <path d="M12 12v.01" />
+                  <path d="M11 17v.01" />
+                  <path d="M7 14v.01" />
+                </svg>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-black">
+                    Cookie & Privacy Notice
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsPreferencesOpen(true)}
+                    className="text-[11px] font-semibold text-neutral-500 hover:text-black underline cursor-pointer"
+                  >
+                    Preferences
+                  </button>
+                </div>
+                <p className="text-xs text-neutral-600 mt-1 leading-relaxed">
+                  We use cookies to personalize drops, remember your bag, and ensure secure checkout on Ravenza.
+                </p>
+
+                <div className="flex items-center gap-2 mt-4 pt-1">
+                  <button
+                    type="button"
+                    onClick={acceptCookies}
+                    className="flex-1 py-2.5 px-4 bg-black hover:bg-neutral-800 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm text-center"
+                  >
+                    Accept All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={declineCookies}
+                    className="py-2.5 px-3.5 bg-white hover:bg-neutral-100 text-neutral-700 border border-neutral-300 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer text-center"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <CookiePreferencesModal
+        isOpen={isPreferencesOpen}
+        onClose={() => setIsPreferencesOpen(false)}
+      />
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Suspense, useEffect } from 'react';
 import Navbar from './components/Navbar';
@@ -58,6 +58,35 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ScrollToTopOnRefreshAndNav() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    // Disable browser default scroll restoration so any refresh always starts at absolute top
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+
+    const handleBeforeUnload = () => {
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+
+  return null;
+}
+
 function App() {
   const user = useStore(state => state.user);
 
@@ -78,6 +107,7 @@ function App() {
 
   return (
     <Router>
+      <ScrollToTopOnRefreshAndNav />
       <ErrorBoundary>
         <SEO />
         <CartProvider>

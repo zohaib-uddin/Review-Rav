@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Eye, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ZoomIn, ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useCart } from '../context/CartContext';
+import QuickViewModal from './collection/QuickViewModal';
 
 interface ProductCardProps {
   product: any;
@@ -18,7 +19,7 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
   const [showSizeSelector, setShowSizeSelector] = useState(false);
   const [selectedSize, setSelectedSize] = useState('');
   const [showQuickView, setShowQuickView] = useState(false);
-  const [quickViewExpanded, setQuickViewExpanded] = useState(false);
+  const [quickViewHovered, setQuickViewHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Get all images for the product
@@ -48,22 +49,22 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
     setIsHovered(false);
     setCurrentImageIndex(0); // Back to first image
     setShowSizeSelector(false);
-    setQuickViewExpanded(false);
+    setQuickViewHovered(false);
   };
 
   // Calculate discount percentage
   const calculateDiscount = () => {
-    const comparePrice = product.compare_at_price || product.compare_price;
+    const rawCompare = product.compare_at_price || product.compare_price || (product as any).comparePrice;
     const actualPrice = product.price || product.base_price;
-    if (comparePrice && actualPrice && comparePrice > actualPrice) {
-      return Math.round(((comparePrice - actualPrice) / comparePrice) * 100);
+    if (rawCompare && actualPrice && Number(rawCompare) > Number(actualPrice)) {
+      return Math.round(((Number(rawCompare) - Number(actualPrice)) / Number(rawCompare)) * 100);
     }
     return null;
   };
 
   const discountPercent = calculateDiscount();
   const hasManualBadge = product.badge || product.is_new_arrival || product.is_best_seller;
-  const showDiscountBadge = !hasManualBadge && discountPercent !== null;
+  const showDiscountBadge = !hasManualBadge && discountPercent !== null && discountPercent > 0;
 
   // Handle Add to Cart with flying animation - using new CartContext
   const { addToCart: addToCartWithAnimation } = useCart();
@@ -76,7 +77,6 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
     const firstColor = product.colors?.[0];
     const colorName = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
     
-    // Use the new CartContext addToCart which triggers flying animation
     addToCartWithAnimation(product, sizeToUse, colorName, 1, e.currentTarget as HTMLElement);
   };
 
@@ -87,9 +87,9 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
     setShowQuickView(true);
   };
 
-  const price = product.price || product.base_price || 0;
-  const comparePrice = product.compare_at_price || product.compare_price;
-  const salePrice = product.salePrice || (comparePrice && comparePrice > price ? comparePrice : null);
+  const price = Number(product.price || product.base_price || 0);
+  const rawCompare = product.compare_at_price || product.compare_price || (product as any).comparePrice;
+  const comparePrice = rawCompare && Number(rawCompare) > price ? Number(rawCompare) : null;
 
   const isOutOfStock = Boolean(
     (product.stockCount !== undefined && Number(product.stockCount) <= 0) ||
@@ -101,10 +101,10 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
   return (
     <motion.div
       ref={cardRef}
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay: index * 0.05 }}
+      initial={{ opacity: 0, scale: 0.94, y: 18 }}
+      whileInView={{ opacity: 1, scale: 1, y: 0 }}
+      viewport={{ once: true, margin: '-20px' }}
+      transition={{ duration: 0.45, delay: (index % 8) * 0.05, ease: [0.22, 1, 0.36, 1] }}
       className="group relative flex flex-col justify-between h-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -179,37 +179,45 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
               </motion.div>
             )}
 
-            {/* Quick View Button - Always visible at bottom right, expands left on hover, lifts above size selector */}
+            {/* Quick View Button:
+                - ZoomIn (search with plus) icon
+                - Default state: No background, no border-radius box, pure black icon with light shadow
+                - On hover: White background with black 'Quick View' text
+                - Positioned slightly higher (86px when size selector is active) so it never touches or sticks to the size selector!
+            */}
             <motion.button
               type="button"
               onClick={handleQuickView}
-              onMouseEnter={() => setQuickViewExpanded(true)}
-              onMouseLeave={() => setQuickViewExpanded(false)}
-              className="absolute right-3 bg-white text-black flex items-center shadow-md z-30 border border-gray-300 rounded-full overflow-hidden cursor-pointer"
+              onMouseEnter={() => setQuickViewHovered(true)}
+              onMouseLeave={() => setQuickViewHovered(false)}
+              className={`absolute right-3.5 z-30 transition-all cursor-pointer flex items-center gap-1.5 ${
+                quickViewHovered
+                  ? 'bg-white text-black px-3 py-1.5 rounded-full shadow-xl border border-black/15'
+                  : 'bg-transparent border-0 p-1 text-black'
+              }`}
               initial={false}
               animate={{
-                bottom: showSizeSelector ? '74px' : '12px',
-                width: quickViewExpanded ? '114px' : '36px',
-                height: '36px',
+                bottom: showSizeSelector ? '86px' : '16px',
               }}
               transition={{
-                bottom: { type: 'spring', damping: 22, stiffness: 260 },
-                width: { duration: 0.22, ease: 'easeOut' },
+                bottom: { type: 'spring', damping: 22, stiffness: 280 },
               }}
               title="Quick View"
               aria-label="Quick View"
             >
-              <div className="w-[36px] h-[36px] flex items-center justify-center flex-shrink-0 text-black">
-                <Eye size={16} strokeWidth={2.2} />
-              </div>
+              <ZoomIn
+                size={quickViewHovered ? 16 : 20}
+                strokeWidth={2.4}
+                className={quickViewHovered ? 'text-black' : 'text-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.45)] hover:scale-115 transition-transform'}
+              />
               <AnimatePresence>
-                {quickViewExpanded && (
+                {quickViewHovered && (
                   <motion.span
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 8 }}
-                    transition={{ duration: 0.15 }}
-                    className="text-[10px] font-black tracking-wider uppercase whitespace-nowrap pr-3 text-black select-none"
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: 'auto' }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="text-[10px] font-black tracking-wider uppercase whitespace-nowrap text-black select-none"
                   >
                     Quick View
                   </motion.span>
@@ -225,7 +233,7 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: '100%', opacity: 0 }}
                   transition={{ duration: 0.25, ease: 'easeOut' }}
-                  className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-3 border-t z-20"
+                  className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm p-3 border-t z-20 shadow-md"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -301,150 +309,14 @@ export default function ProductCard({ product, index = 0, fullWidth = false }: P
         )}
       </div>
 
-      {/* Quick View Modal */}
-      <AnimatePresence>
-        {showQuickView && (
-          <QuickViewModal
-            product={product}
-            onClose={() => setShowQuickView(false)}
-          />
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-// Quick View Modal Component
-function QuickViewModal({ product, onClose }: { product: any; onClose: () => void }) {
-  const { addToCart } = useCart();
-  const [selectedSize, setSelectedSize] = useState(product.sizes?.[0] || 'M');
-  const firstColor = product.colors?.[0];
-  const initialColor = typeof firstColor === 'string' ? firstColor : firstColor?.name || 'Black';
-  const [selectedColor, setSelectedColor] = useState(initialColor);
-
-  const handleAddToCart = (e: React.MouseEvent) => {
-    const sizeToUse = selectedSize || product.sizes?.[0] || 'M';
-    addToCart(product, sizeToUse, selectedColor, 1, e.currentTarget as HTMLElement);
-    onClose();
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="grid md:grid-cols-2 gap-6 p-6">
-          {/* Product Image */}
-          <div className="aspect-square rounded-xl overflow-hidden bg-gray-100">
-            <img
-              src={product.image}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          {/* Product Details */}
-          <div className="flex flex-col">
-            <h2 className="text-2xl font-bold mb-2">{product.name}</h2>
-            
-            {/* Price */}
-            <div className="flex items-center gap-3 mb-4">
-              {product.salePrice ? (
-                <>
-                  <span className="text-2xl font-bold text-black">
-                    Rs.{product.salePrice.toLocaleString()}
-                  </span>
-                  <span className="text-lg text-gray-400 line-through">
-                    Rs.{product.price?.toLocaleString()}
-                  </span>
-                </>
-              ) : (
-                <span className="text-2xl font-bold text-black">
-                  Rs.{product.price?.toLocaleString()}
-                </span>
-              )}
-            </div>
-
-            {/* Description */}
-            <p className="text-gray-600 mb-6">{product.description}</p>
-
-            {/* Size Selection */}
-            {product.sizes && product.sizes.length > 0 && (
-              <div className="mb-4">
-                <p className="text-sm font-medium mb-2">Size</p>
-                <div className="flex gap-2 flex-wrap">
-                  {product.sizes.map((size: string) => (
-                    <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all ${
-                        selectedSize === size
-                          ? 'border-black bg-black text-white'
-                          : 'border-gray-300 hover:border-black'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Color Selection */}
-            {product.colors && product.colors.length > 0 && (
-              <div className="mb-6">
-                <p className="text-sm font-medium mb-2">Color</p>
-                <div className="flex gap-2 flex-wrap">
-                  {product.colors.map((color: any, idx: number) => {
-                    const colorName = typeof color === 'string' ? color : color.name;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedColor(colorName)}
-                        className={`px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all ${
-                        selectedColor === colorName
-                          ? 'border-black bg-black text-white'
-                          : 'border-gray-300 hover:border-black'
-                      }`}
-                    >
-                      {colorName}
-                    </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 mt-auto">
-              <button
-                onClick={handleAddToCart}
-                className="flex-1 bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-              >
-                <ShoppingBag size={18} />
-                Add to Cart
-              </button>
-              <Link
-                to={`/products/${product.slug}`}
-                onClick={onClose}
-                className="flex-1 border-2 border-black text-black py-3 rounded-lg font-medium hover:bg-black hover:text-white transition-colors text-center"
-              >
-                View Full Details
-              </Link>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+      {/* Upgraded Quick View Modal */}
+      {showQuickView && (
+        <QuickViewModal
+          product={product}
+          isOpen={showQuickView}
+          onClose={() => setShowQuickView(false)}
+        />
+      )}
     </motion.div>
   );
 }

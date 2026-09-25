@@ -35,8 +35,19 @@ export default function CustomerDashboard() {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'wishlist' | 'addresses' | 'settings'>('overview');
 
-  // Address State
-  const [addresses, setAddresses] = useState<any[]>([]);
+  // Address State with permanent instant-restore cache
+  const [addresses, setAddresses] = useState<any[]>(() => {
+    try {
+      const savedUser = localStorage.getItem('ravenza_user');
+      const u = savedUser ? JSON.parse(savedUser) : null;
+      if (u) {
+        const cached = localStorage.getItem('ravenza_addresses_' + u.id) ||
+          (u.email ? localStorage.getItem('ravenza_addresses_' + u.email) : null);
+        if (cached) return JSON.parse(cached);
+      }
+    } catch (_) {}
+    return [];
+  });
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<any | null>(null);
@@ -84,14 +95,33 @@ export default function CustomerDashboard() {
 
   const loadAddresses = async () => {
     if (!user) return;
-    setIsLoadingAddresses(true);
+    if (addresses.length === 0) setIsLoadingAddresses(true);
     try {
-      const data = await api.getAddresses(user.id);
-      if (Array.isArray(data)) {
+      const data = await api.getAddresses(user.id, user.email);
+      if (Array.isArray(data) && data.length > 0) {
         setAddresses(data);
+        localStorage.setItem('ravenza_addresses_' + user.id, JSON.stringify(data));
+        if (user.email) {
+          localStorage.setItem('ravenza_addresses_' + user.email, JSON.stringify(data));
+        }
+      } else {
+        const cached = localStorage.getItem('ravenza_addresses_' + user.id) ||
+          (user.email ? localStorage.getItem('ravenza_addresses_' + user.email) : null);
+        if (cached) {
+          try {
+            setAddresses(JSON.parse(cached));
+          } catch (_) {}
+        }
       }
     } catch (err) {
       console.warn('Failed to load addresses:', err);
+      const cached = localStorage.getItem('ravenza_addresses_' + user.id) ||
+        (user.email ? localStorage.getItem('ravenza_addresses_' + user.email) : null);
+      if (cached) {
+        try {
+          setAddresses(JSON.parse(cached));
+        } catch (_) {}
+      }
     } finally {
       setIsLoadingAddresses(false);
     }
@@ -109,12 +139,14 @@ export default function CustomerDashboard() {
       if (editingAddress) {
         await api.updateAddress(editingAddress.id, {
           user_id: user.id,
+          email: user.email,
           ...addressForm,
         });
         toast.success('Address updated successfully!');
       } else {
         await api.createAddress({
           user_id: user.id,
+          email: user.email,
           ...addressForm,
         });
         toast.success('Address added to your account!');
@@ -130,7 +162,7 @@ export default function CustomerDashboard() {
         phone: user.phone || '',
         is_default: addresses.length === 0,
       });
-      loadAddresses();
+      await loadAddresses();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save address.');
     }
@@ -140,6 +172,14 @@ export default function CustomerDashboard() {
     if (!confirm('Are you sure you want to delete this address?')) return;
     try {
       await api.deleteAddress(id);
+      const updated = addresses.filter((a) => a.id !== id);
+      setAddresses(updated);
+      if (user) {
+        localStorage.setItem('ravenza_addresses_' + user.id, JSON.stringify(updated));
+        if (user.email) {
+          localStorage.setItem('ravenza_addresses_' + user.email, JSON.stringify(updated));
+        }
+      }
       toast.success('Address removed.');
       loadAddresses();
     } catch (err: any) {
@@ -152,6 +192,7 @@ export default function CustomerDashboard() {
     try {
       await api.updateAddress(addr.id, {
         user_id: user.id,
+        email: user.email,
         is_default: true,
       });
       toast.success('Set as primary delivery address.');

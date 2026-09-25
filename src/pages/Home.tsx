@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import HomeIntroLoader from '../components/home/HomeIntroLoader';
 import {
   HeroBanner,
   WarmChapterSection,
@@ -22,6 +23,9 @@ export default function Home() {
 
   return (
     <div>
+      {/* Home-only 1-2 second luxury intro loading bar with logo docking animation */}
+      <HomeIntroLoader />
+
       <HeroBanner />
       <WarmChapterSection />
       <CollectionsInFocus />

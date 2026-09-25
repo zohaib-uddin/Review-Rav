@@ -26,29 +26,52 @@ export default function CollectionHero({ category }: CollectionHeroProps) {
     return () => clearInterval(interval);
   }, [images.length]);
 
+  // Preload all collection banner images
+  useEffect(() => {
+    images.forEach((url: string) => {
+      if (url) {
+        const img = new Image();
+        img.src = url;
+      }
+    });
+  }, [images]);
+
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % images.length);
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + images.length) % images.length);
 
   return (
-    <div className="relative h-[80vh] overflow-hidden bg-black">
-      {/* Background Image Carousel */}
+    <div className="relative h-[80vh] overflow-hidden bg-neutral-900 select-none">
+      {/* Background Image Carousel - Stacked cross-fade without black flashes */}
       <div className="absolute inset-0">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentSlide}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.7 }}
-            className="absolute inset-0"
-          >
-            <img
-              src={images[currentSlide]}
-              alt={`${category.name} - Slide ${currentSlide + 1}`}
-              className="w-full h-full object-cover"
-            />
-          </motion.div>
-        </AnimatePresence>
+        {images.map((imgUrl: string, idx: number) => {
+          const isActive = idx === currentSlide;
+          return (
+            <motion.div
+              key={idx}
+              initial={false}
+              animate={{
+                opacity: isActive ? 1 : 0,
+                scale: isActive ? 1 : 1.03,
+              }}
+              transition={{
+                opacity: { duration: 0.8, ease: [0.25, 1, 0.5, 1] },
+                scale: { duration: 1.2, ease: 'easeOut' },
+              }}
+              style={{
+                zIndex: isActive ? 10 : 0,
+                pointerEvents: isActive ? 'auto' : 'none',
+              }}
+              className="absolute inset-0"
+            >
+              <img
+                src={imgUrl}
+                alt={`${category.name} - Slide ${idx + 1}`}
+                className="w-full h-full object-cover"
+                loading="eager"
+              />
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Navigation Arrows - Minimalist, No Background */}

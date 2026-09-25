@@ -1133,6 +1133,36 @@ let collectionsStore = [...initialCollections];
 let reviewsStore = [...initialReviews];
 let ordersStore = [...initialOrders];
 let faqsStore = [...initialFaqs];
+let addressesStore: any[] = [
+  {
+    id: 'addr-seed-1',
+    user_id: 'default_user',
+    user_email: 'ahmed.khan@gmail.com',
+    type: 'shipping',
+    address_line_1: '123 Main Boulevard, Phase 6',
+    address_line_2: 'Apartment 4B',
+    city: 'Lahore',
+    region: 'Punjab',
+    postal_code: '54000',
+    phone: '+923001234567',
+    is_default: true,
+    created_at: new Date(Date.now() - 14 * 86400000).toISOString(),
+  },
+  {
+    id: 'addr-seed-2',
+    user_id: 'default_user',
+    user_email: 'sara.ali@gmail.com',
+    type: 'shipping',
+    address_line_1: '456 Garden Town',
+    address_line_2: 'House 12',
+    city: 'Karachi',
+    region: 'Sindh',
+    postal_code: '74000',
+    phone: '+923002345678',
+    is_default: true,
+    created_at: new Date(Date.now() - 4 * 86400000).toISOString(),
+  }
+];
 let journalStore = [...initialJournal];
 let couponsStore = [...initialCoupons];
 let newsletterStore: { id: string; email: string; date: string; is_active: boolean }[] = [
@@ -2927,6 +2957,66 @@ app.use((err: any, req: any, res: any, next: any) => {
 
       ordersStore.unshift(newOrder as any);
 
+      // Auto-save shipping address to user's address book for permanent persistence
+      if (shippingAddress && (rawUserId || orderEmail)) {
+        try {
+          const addrLine1 = shippingAddress.address || shippingAddress.address_line_1 || `${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}`.trim() || 'Home Address';
+          const addrCity = shippingAddress.city || 'Karachi';
+          const addrPhone = shippingAddress.phone || '';
+          const addrRegion = shippingAddress.region || shippingAddress.province || 'Sindh';
+          const addrPostal = shippingAddress.postalCode || shippingAddress.postal_code || '';
+
+          const existingAddr = addressesStore.find((a: any) => 
+            (a.user_id === rawUserId || a.user_email === orderEmail) &&
+            a.address_line_1?.toLowerCase() === addrLine1.toLowerCase() &&
+            a.city?.toLowerCase() === addrCity.toLowerCase()
+          );
+
+          if (!existingAddr) {
+            const newAddrObj = {
+              id: `addr-${Date.now()}`,
+              user_id: rawUserId || 'guest',
+              user_email: orderEmail || '',
+              type: 'shipping',
+              address_line_1: addrLine1,
+              address_line_2: shippingAddress.address_line_2 || shippingAddress.apartment || '',
+              city: addrCity,
+              region: addrRegion,
+              postal_code: addrPostal,
+              phone: addrPhone,
+              is_default: addressesStore.filter((a: any) => a.user_id === rawUserId || a.user_email === orderEmail).length === 0,
+              created_at: new Date().toISOString(),
+            };
+            addressesStore.unshift(newAddrObj);
+
+            if (sql) {
+              (async () => {
+                try {
+                  let dbUserId: string | null = null;
+                  if (rawUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawUserId)) {
+                    dbUserId = rawUserId;
+                  } else if (orderEmail) {
+                    const uRows = await sql`SELECT id FROM users WHERE email = ${orderEmail} LIMIT 1`;
+                    if (uRows && uRows.length > 0) dbUserId = uRows[0].id;
+                  }
+
+                  if (dbUserId) {
+                    await sql`
+                      INSERT INTO addresses (user_id, type, address_line_1, address_line_2, city, region, postal_code, phone, is_default)
+                      VALUES (${dbUserId}, 'shipping', ${addrLine1}, ${shippingAddress.address_line_2 || null}, ${addrCity}, ${addrRegion}, ${addrPostal || null}, ${addrPhone}, ${newAddrObj.is_default})
+                    `;
+                  }
+                } catch (sqlAddrErr: any) {
+                  console.warn('Neon auto-save address note:', sqlAddrErr.message);
+                }
+              })();
+            }
+          }
+        } catch (addrErr) {
+          console.error('Error auto-saving order address:', addrErr);
+        }
+      }
+
       // Trigger automatic confirmation email to the email specified at checkout Step 1
       sendOrderConfirmationEmail(newOrder).catch((e) => {
         console.error('Auto order confirmation dispatch error:', e);
@@ -3198,16 +3288,112 @@ app.use((err: any, req: any, res: any, next: any) => {
   // ==================== ADDRESSES ROUTES ====================
   app.get('/api/addresses', optionalAuth, async (req, res) => {
     try {
-      const uid = req.user?.id || (req.query.user_id as string);
-      if (!uid) return res.json([]);
-      if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+      const uid = req.user?.id || (req.query.user_id as string) || '';
+      const uemail = (req.user?.email || (req.query.email as string) || '').trim().toLowerCase();
+
+      if (!uid && !uemail) return res.json([]);
+
+      let loadedAddresses: any[] = [];
+
+      // 1. Try fetching from Neon DB if SQL is connected
+      if (sql) {
         try {
-          const rows = await sql`SELECT * FROM addresses WHERE user_id = ${uid} ORDER BY is_default DESC, created_at DESC`;
-          return res.json(rows);
-        } catch (e) {
-          console.error('Neon addresses error:', e);
+          let rows: any[] = [];
+          if (uid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+            rows = await sql`
+              SELECT * FROM addresses 
+              WHERE user_id = ${uid} 
+                 OR (user_id IN (SELECT id FROM users WHERE LOWER(email) = ${uemail}))
+              ORDER BY is_default DESC, created_at DESC
+            `;
+          } else if (uemail) {
+            rows = await sql`
+              SELECT a.* FROM addresses a
+              JOIN users u ON a.user_id = u.id
+              WHERE LOWER(u.email) = ${uemail}
+              ORDER BY a.is_default DESC, a.created_at DESC
+            `;
+          }
+
+          if (rows && rows.length > 0) {
+            loadedAddresses = rows;
+            // Sync loaded rows into addressesStore for fast memory retrieval
+            rows.forEach((r: any) => {
+              const existingIdx = addressesStore.findIndex((a) => a.id === r.id);
+              if (existingIdx !== -1) {
+                addressesStore[existingIdx] = { ...addressesStore[existingIdx], ...r, user_email: uemail || addressesStore[existingIdx].user_email };
+              } else {
+                addressesStore.push({ ...r, user_email: uemail });
+              }
+            });
+            return res.json(loadedAddresses);
+          }
+        } catch (e: any) {
+          console.error('Neon addresses query error:', e.message);
         }
       }
+
+      // 2. Check in-memory addressesStore
+      const memMatches = addressesStore.filter((a) => {
+        const matchesId = uid && (a.user_id === uid || a.user_id?.toString() === uid.toString());
+        const matchesEmail = uemail && a.user_email?.toLowerCase() === uemail;
+        return matchesId || matchesEmail;
+      });
+
+      if (memMatches.length > 0) {
+        return res.json(memMatches);
+      }
+
+      // 3. Fallback: Search user's past placed orders for shipping address so they are never lost
+      const pastOrder = ordersStore.find((o) => {
+        const matchesId = uid && o.user_id === uid;
+        const matchesEmail = uemail && o.email?.toLowerCase() === uemail;
+        return (matchesId || matchesEmail) && o.shipping_address;
+      });
+
+      if (pastOrder && pastOrder.shipping_address) {
+        const s = pastOrder.shipping_address;
+        const recoveredAddress = {
+          id: `addr-recovered-${pastOrder.id}`,
+          user_id: uid || pastOrder.user_id || 'default_user',
+          user_email: uemail || pastOrder.email || '',
+          type: 'shipping',
+          address_line_1: s.address || s.address_line_1 || `${s.firstName || ''} ${s.lastName || ''}`.trim() || 'Home Address',
+          address_line_2: s.address_line_2 || s.apartment || '',
+          city: s.city || 'Karachi',
+          region: s.region || s.province || 'Sindh',
+          postal_code: s.postalCode || s.postal_code || '',
+          phone: s.phone || '',
+          is_default: true,
+          created_at: pastOrder.created_at || new Date().toISOString(),
+        };
+
+        addressesStore.unshift(recoveredAddress);
+
+        if (sql) {
+          (async () => {
+            try {
+              let dbUid: string | null = null;
+              if (uid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+                dbUid = uid;
+              } else if (uemail) {
+                const uRows = await sql`SELECT id FROM users WHERE LOWER(email) = ${uemail} LIMIT 1`;
+                if (uRows && uRows.length > 0) dbUid = uRows[0].id;
+              }
+
+              if (dbUid) {
+                await sql`
+                  INSERT INTO addresses (user_id, type, address_line_1, address_line_2, city, region, postal_code, phone, is_default)
+                  VALUES (${dbUid}, 'shipping', ${recoveredAddress.address_line_1}, ${recoveredAddress.address_line_2 || null}, ${recoveredAddress.city}, ${recoveredAddress.region}, ${recoveredAddress.postal_code || null}, ${recoveredAddress.phone}, true)
+                `;
+              }
+            } catch (_) {}
+          })();
+        }
+
+        return res.json([recoveredAddress]);
+      }
+
       res.json([]);
     } catch (err: any) {
       res.status(500).json({ message: 'Error fetching addresses', error: err.message });
@@ -3216,7 +3402,8 @@ app.use((err: any, req: any, res: any, next: any) => {
 
   app.post('/api/addresses', optionalAuth, async (req, res) => {
     try {
-      const uid = req.user?.id || req.body.user_id;
+      const uid = req.user?.id || req.body.user_id || 'default_user';
+      const uemail = (req.user?.email || req.body.email || '').trim().toLowerCase();
       const {
         address_line_1,
         address_line_2,
@@ -3228,25 +3415,70 @@ app.use((err: any, req: any, res: any, next: any) => {
         is_default = false,
       } = req.body;
 
-      if (!uid) return res.status(401).json({ message: 'User ID is required' });
+      if (!address_line_1 || !city) {
+        return res.status(400).json({ message: 'Address and city are required' });
+      }
 
-      if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+      // If is_default is set to true, clear existing defaults for this user
+      if (is_default) {
+        addressesStore.forEach((a) => {
+          if (a.user_id === uid || (uemail && a.user_email?.toLowerCase() === uemail)) {
+            a.is_default = false;
+          }
+        });
+      }
+
+      const newAddrId = `addr-${Date.now()}`;
+      const newAddressObj = {
+        id: newAddrId,
+        user_id: uid,
+        user_email: uemail,
+        type,
+        address_line_1,
+        address_line_2: address_line_2 || '',
+        city,
+        region: region || 'Sindh',
+        postal_code: postal_code || '',
+        phone: phone || '',
+        is_default: Boolean(is_default),
+        created_at: new Date().toISOString(),
+      };
+
+      addressesStore.unshift(newAddressObj);
+
+      // Persist to Neon DB
+      let dbAddress: any = null;
+      if (sql) {
         try {
-          if (is_default) {
-            await sql`UPDATE addresses SET is_default = false WHERE user_id = ${uid}`;
+          let dbUid: string | null = null;
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
+            dbUid = uid;
+          } else if (uemail) {
+            const uRows = await sql`SELECT id FROM users WHERE LOWER(email) = ${uemail} LIMIT 1`;
+            if (uRows && uRows.length > 0) dbUid = uRows[0].id;
           }
 
-          const rows = await sql`
-            INSERT INTO addresses (user_id, type, address_line_1, address_line_2, city, region, postal_code, phone, is_default)
-            VALUES (${uid}, ${type}, ${address_line_1}, ${address_line_2 || null}, ${city}, ${region || 'Sindh'}, ${postal_code || null}, ${phone || ''}, ${Boolean(is_default)})
-            RETURNING *
-          `;
-          return res.status(201).json(rows[0]);
-        } catch (e) {
-          console.error('Neon insert address error:', e);
+          if (dbUid) {
+            if (is_default) {
+              await sql`UPDATE addresses SET is_default = false WHERE user_id = ${dbUid}`;
+            }
+
+            const rows = await sql`
+              INSERT INTO addresses (user_id, type, address_line_1, address_line_2, city, region, postal_code, phone, is_default)
+              VALUES (${dbUid}, ${type}, ${address_line_1}, ${address_line_2 || null}, ${city}, ${region || 'Sindh'}, ${postal_code || null}, ${phone || ''}, ${Boolean(is_default)})
+              RETURNING *
+            `;
+            if (rows && rows.length > 0) {
+              dbAddress = rows[0];
+              newAddressObj.id = dbAddress.id;
+            }
+          }
+        } catch (e: any) {
+          console.error('Neon insert address error:', e.message);
         }
       }
-      res.status(201).json({ id: `addr-${Date.now()}`, user_id: uid, address_line_1, city, phone, type, is_default });
+
+      res.status(201).json(dbAddress || newAddressObj);
     } catch (err: any) {
       res.status(500).json({ message: 'Error creating address', error: err.message });
     }
@@ -3256,6 +3488,7 @@ app.use((err: any, req: any, res: any, next: any) => {
     try {
       const { id } = req.params;
       const uid = req.user?.id || req.body.user_id;
+      const uemail = (req.user?.email || req.body.email || '').trim().toLowerCase();
       const {
         address_line_1,
         address_line_2,
@@ -3266,9 +3499,32 @@ app.use((err: any, req: any, res: any, next: any) => {
         is_default,
       } = req.body;
 
+      // Update in memory
+      const addrIdx = addressesStore.findIndex((a) => a.id === id);
+      if (addrIdx !== -1) {
+        if (is_default) {
+          addressesStore.forEach((a) => {
+            if (a.user_id === uid || (uemail && a.user_email?.toLowerCase() === uemail)) {
+              a.is_default = false;
+            }
+          });
+        }
+        addressesStore[addrIdx] = {
+          ...addressesStore[addrIdx],
+          ...(address_line_1 ? { address_line_1 } : {}),
+          ...(address_line_2 !== undefined ? { address_line_2 } : {}),
+          ...(city ? { city } : {}),
+          ...(region ? { region } : {}),
+          ...(postal_code !== undefined ? { postal_code } : {}),
+          ...(phone !== undefined ? { phone } : {}),
+          ...(is_default !== undefined ? { is_default: Boolean(is_default) } : {}),
+        };
+      }
+
+      // Update in Neon DB
       if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         try {
-          if (is_default && uid) {
+          if (is_default && uid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid)) {
             await sql`UPDATE addresses SET is_default = false WHERE user_id = ${uid}`;
           }
 
@@ -3287,11 +3543,12 @@ app.use((err: any, req: any, res: any, next: any) => {
           if (rows && rows.length > 0) {
             return res.json(rows[0]);
           }
-        } catch (e) {
-          console.error('Neon update address error:', e);
+        } catch (e: any) {
+          console.error('Neon update address error:', e.message);
         }
       }
-      res.json({ success: true, id, message: 'Address updated' });
+
+      res.json(addrIdx !== -1 ? addressesStore[addrIdx] : { success: true, id, message: 'Address updated' });
     } catch (err: any) {
       res.status(500).json({ message: 'Error updating address', error: err.message });
     }
@@ -3300,12 +3557,13 @@ app.use((err: any, req: any, res: any, next: any) => {
   app.delete('/api/addresses/:id', optionalAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      addressesStore = addressesStore.filter((a) => a.id !== id);
+
       if (sql && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
         try {
           await sql`DELETE FROM addresses WHERE id = ${id}`;
-          return res.json({ success: true, message: 'Address deleted' });
-        } catch (e) {
-          console.error('Neon delete address error:', e);
+        } catch (e: any) {
+          console.error('Neon delete address error:', e.message);
         }
       }
       res.json({ success: true, message: 'Address deleted' });

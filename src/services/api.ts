@@ -79,9 +79,12 @@ class ApiService {
   }
 
   // Addresses
-  async getAddresses(userId?: string) {
-    const params = userId ? `?user_id=${userId}` : '';
-    return this.request<any[]>(`/addresses${params}`);
+  async getAddresses(userId?: string, email?: string) {
+    const params = new URLSearchParams();
+    if (userId) params.set('user_id', userId);
+    if (email) params.set('email', email);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any[]>(`/addresses${qs}`);
   }
 
   async createAddress(data: any) {

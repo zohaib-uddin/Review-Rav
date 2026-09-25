@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 76" fill="none" className="ravenza-brand-logo">
+  <!-- RAVENZA Iconic Geometric Wings / Raven Insignia -->
+  <g transform="translate(10, 8)">
+    <!-- Left Wing Feathers -->
+    <path d="M4 22 L22 4 L26 12 L12 24 Z" fill="#000000" />
+    <path d="M0 32 L26 18 L30 26 L8 36 Z" fill="#000000" />
+    <path d="M2 44 L28 32 L31 40 L10 48 Z" fill="#000000" />
+    
+    <!-- Central Raven Falcon Shield Core -->
+    <polygon points="34,6 40,24 34,54 28,24" fill="#000000" />
+    <polygon points="34,14 38,26 34,42 30,26" fill="#FFFFFF" opacity="0.9" />
+    <circle cx="34" cy="27" r="2.5" fill="#000000" />
+    
+    <!-- Right Wing Feathers -->
+    <path d="M64 22 L46 4 L42 12 L56 24 Z" fill="#000000" />
+    <path d="M68 32 L42 18 L38 26 L60 36 Z" fill="#000000" />
+    <path d="M66 44 L40 32 L37 40 L58 48 Z" fill="#000000" />
+  </g>
+
+  <!-- Typography: RAVENZA in Sharp Streetwear Luxury Aesthetics -->
+  <text x="96" y="44" font-family="'Space Grotesk', 'Cabinet Grotesk', 'Helvetica Neue', 'Arial Black', sans-serif" font-size="34" font-weight="900" letter-spacing="0.22em" fill="#000000">RAVENZA</text>
+</svg>
