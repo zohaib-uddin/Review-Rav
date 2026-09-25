@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Shield, Lock, Mail, Eye, EyeOff, Check, Copy, ArrowLeft, AlertCircle, Sparkles } from 'lucide-react';
+import { Shield, Lock, Mail, Eye, EyeOff, Check, Copy, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import api from '../../services/api';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
+  const adminUser = useStore((state) => state.adminUser);
   const [email, setEmail] = useState('admin@ravenza.pk');
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
@@ -14,50 +15,54 @@ export default function AdminLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState('');
 
+  // Auto-redirect if already logged in as admin
+  useEffect(() => {
+    if (adminUser && adminUser.role === 'admin') {
+      navigate('/admin', { replace: true });
+    }
+  }, [adminUser, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    try {
-      // 1. Check credentials
-      if (email.trim().toLowerCase() !== 'admin@ravenza.pk' && !email.includes('admin')) {
-        setError('Access Denied: Customer accounts cannot log in to the Admin Panel.');
-        setIsLoading(false);
-        return;
-      }
+    const cleanEmail = email.trim();
 
-      // Try server login
+    try {
+      // 1. Try server login
       try {
-        const result = await api.login(email.trim(), password);
+        const result = await api.login(cleanEmail, password);
         if (result && result.user) {
-          if (result.user.role !== 'admin' && email.trim().toLowerCase() !== 'admin@ravenza.pk') {
+          if (result.user.role !== 'admin' && cleanEmail.toLowerCase() !== 'admin@ravenza.pk') {
             setError('Access Denied: Only accounts with the Administrator role can access this portal.');
             setIsLoading(false);
             return;
           }
-          api.setToken(result.token);
-          useStore.setState({ user: { ...result.user, role: 'admin' }, apiAvailable: true });
+          const adminProfile = { ...result.user, role: 'admin' as const };
+          api.setAdminToken(result.token);
+          localStorage.setItem('ravenza_admin_user', JSON.stringify(adminProfile));
+          useStore.setState({ adminUser: adminProfile, apiAvailable: true });
           navigate('/admin');
           return;
         }
       } catch (apiErr: any) {
-        // Fallback for valid demo admin credentials
-        if (email.trim() === 'admin@ravenza.pk' && password === 'admin123') {
-          useStore.setState({
-            user: {
-              id: 'admin-01',
-              email: 'admin@ravenza.pk',
-              name: 'Master Administrator',
-              role: 'admin',
-              is_verified: true,
-            },
-            apiAvailable: false,
-          });
+        // Fallback for default demo admin credentials
+        if (cleanEmail.toLowerCase() === 'admin@ravenza.pk' && password === 'admin123') {
+          const fallbackAdmin = {
+            id: 'admin-01',
+            email: 'admin@ravenza.pk',
+            name: 'Master Administrator',
+            role: 'admin' as const,
+            is_verified: true,
+          };
+          api.setAdminToken('mock-admin-token');
+          localStorage.setItem('ravenza_admin_user', JSON.stringify(fallbackAdmin));
+          useStore.setState({ adminUser: fallbackAdmin, apiAvailable: false });
           navigate('/admin');
           return;
         }
-        setError(apiErr?.message || 'Invalid administrator email or password.');
+        setError(apiErr?.message || 'Invalid administrator credentials. Ensure role is set to "admin" in database.');
       }
     } finally {
       setIsLoading(false);

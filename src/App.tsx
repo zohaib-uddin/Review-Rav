@@ -89,6 +89,22 @@ function ScrollToTopOnRefreshAndNav() {
 
 function App() {
   const user = useStore(state => state.user);
+  const adminUser = useStore(state => state.adminUser);
+
+  // Synchronously determine admin authentication status including localStorage persistence
+  const isAdminAuthenticated = Boolean(
+    adminUser?.role === 'admin' ||
+    (() => {
+      try {
+        const stored = typeof window !== 'undefined' ? localStorage.getItem('ravenza_admin_user') : null;
+        if (!stored) return false;
+        const parsed = JSON.parse(stored);
+        return parsed && parsed.role === 'admin';
+      } catch {
+        return false;
+      }
+    })()
+  );
 
   // Initialize PWA
   useEffect(() => {
@@ -125,11 +141,11 @@ function App() {
                 ================================================================= */}
             <Route 
               path="/admin" 
-              element={user?.role === 'admin' ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
+              element={isAdminAuthenticated ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
             />
             <Route 
               path="/admin/:section" 
-              element={user?.role === 'admin' ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
+              element={isAdminAuthenticated ? <AdminPanel /> : <Navigate to="/admin/login" replace />} 
             />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/signin" element={<Navigate to="/admin/login" replace />} />

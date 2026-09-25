@@ -34,9 +34,23 @@ export default function Footer() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success(data.message || 'Successfully subscribed to VIP newsletter!');
-        setSubscribedSuccess(true);
-        setNewsletterEmail('');
+        if (data.already_subscribed) {
+          toast(data.message || 'You have already subscribed with this email.', {
+            icon: '⚠️',
+            style: {
+              background: '#fffbeb',
+              color: '#b45309',
+              border: '1px solid #fde68a',
+              fontWeight: 600,
+              fontSize: '13px',
+            },
+            duration: 4000
+          });
+        } else {
+          toast.success(data.message || 'Successfully subscribed to VIP newsletter!');
+          setSubscribedSuccess(true);
+          setNewsletterEmail('');
+        }
       } else {
         toast.error(data.message || 'Subscription failed');
       }

@@ -69,6 +69,24 @@ export default function AdminOrders() {
     }
   };
 
+  const handlePaymentStatusChange = async (orderId: string, newPaymentStatus: string) => {
+    setUpdatingId(orderId);
+    try {
+      setOrders(prev => prev.map(o => (o.id === orderId || o.order_number === orderId) ? { ...o, payment_status: newPaymentStatus } : o));
+      if (selectedOrder && (selectedOrder.id === orderId || selectedOrder.order_number === orderId)) {
+        setSelectedOrder((prev: any) => ({ ...prev, payment_status: newPaymentStatus }));
+      }
+
+      await api.updateOrderPaymentStatus(orderId, newPaymentStatus);
+      showToast(`Payment status updated to ${newPaymentStatus.toUpperCase()}`);
+    } catch (err) {
+      console.error('Failed to update payment status:', err);
+      loadOrders();
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'delivered':
@@ -83,6 +101,18 @@ export default function AdminOrders() {
         return 'bg-red-50 text-red-700 border-red-200';
       default:
         return 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+  };
+
+  const getPaymentBadge = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'paid':
+        return 'bg-emerald-50 text-emerald-800 border-emerald-300';
+      case 'refunded':
+        return 'bg-purple-50 text-purple-800 border-purple-300';
+      case 'unpaid':
+      default:
+        return 'bg-amber-50 text-amber-800 border-amber-300';
     }
   };
 
@@ -262,7 +292,8 @@ export default function AdminOrders() {
                 <th className="p-4">Date</th>
                 <th className="p-4">Customer</th>
                 <th className="p-4">Total Amount</th>
-                <th className="p-4">Status</th>
+                <th className="p-4">Order Status</th>
+                <th className="p-4">Payment Status</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -299,12 +330,26 @@ export default function AdminOrders() {
                         disabled={updatingId === order.id}
                         className={`text-xs px-2.5 py-1 rounded-full font-bold border transition-colors cursor-pointer focus:outline-none ${getStatusBadge(order.status)}`}
                       >
+                        <option value="pending">Pending</option>
                         <option value="pending_verification">Pending Verification</option>
                         <option value="confirmed">Confirmed</option>
                         <option value="processing">Processing</option>
                         <option value="shipped">Shipped</option>
                         <option value="delivered">Delivered</option>
                         <option value="cancelled">Cancelled</option>
+                      </select>
+                    </td>
+
+                    <td className="p-4">
+                      <select
+                        value={order.payment_status || 'unpaid'}
+                        onChange={(e) => handlePaymentStatusChange(order.id, e.target.value)}
+                        disabled={updatingId === order.id}
+                        className={`text-xs px-2.5 py-1 rounded-full font-bold border transition-colors cursor-pointer focus:outline-none uppercase ${getPaymentBadge(order.payment_status || 'unpaid')}`}
+                      >
+                        <option value="unpaid">Unpaid</option>
+                        <option value="paid">Paid</option>
+                        <option value="refunded">Refunded</option>
                       </select>
                     </td>
 
@@ -438,7 +483,13 @@ export default function AdminOrders() {
                 <p><span className="text-gray-500">Name:</span> <strong className="text-gray-800">{selectedOrder.shipping_address?.full_name || selectedOrder.shipping_address?.firstName || 'Guest'}</strong></p>
                 <p><span className="text-gray-500">Phone:</span> <strong className="text-gray-800">{selectedOrder.shipping_address?.phone || 'Not provided'}</strong></p>
                 <p><span className="text-gray-500">Email:</span> <strong className="text-gray-800">{selectedOrder.email || selectedOrder.shipping_address?.email || 'Not provided'}</strong></p>
-                <p><span className="text-gray-500">Payment:</span> <strong className="text-gray-800 uppercase">{selectedOrder.payment_method || 'COD (Cash on Delivery)'}</strong></p>
+                <p><span className="text-gray-500">Payment Method:</span> <strong className="text-gray-800 uppercase">{selectedOrder.payment_method || 'COD (Cash on Delivery)'}</strong></p>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-gray-500">Payment Status:</span>
+                  <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] border ${getPaymentBadge(selectedOrder.payment_status || 'unpaid')}`}>
+                    {selectedOrder.payment_status || 'unpaid'}
+                  </span>
+                </div>
               </div>
 
               {/* Delivery Address */}
@@ -525,27 +576,43 @@ export default function AdminOrders() {
 
             {/* Quick Status Update Footer */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-700">Change Status:</span>
-                <select
-                  value={selectedOrder.status}
-                  onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value)}
-                  className="px-3 py-1.5 text-xs font-bold border border-gray-300 rounded-xl focus:outline-none focus:border-black"
-                >
-                  <option value="pending_verification">Pending Verification</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="processing">Processing</option>
-                  <option value="shipped">Shipped</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-700">Order Status:</span>
+                  <select
+                    value={selectedOrder.status}
+                    onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value)}
+                    className="px-3 py-1.5 text-xs font-bold border border-gray-300 rounded-xl focus:outline-none focus:border-black"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="pending_verification">Pending Verification</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="processing">Processing</option>
+                    <option value="shipped">Shipped</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-700">Payment Status:</span>
+                  <select
+                    value={selectedOrder.payment_status || 'unpaid'}
+                    onChange={(e) => handlePaymentStatusChange(selectedOrder.id, e.target.value)}
+                    className="px-3 py-1.5 text-xs font-bold border border-gray-300 rounded-xl focus:outline-none focus:border-black uppercase"
+                  >
+                    <option value="unpaid">Unpaid</option>
+                    <option value="paid">Paid</option>
+                    <option value="refunded">Refunded</option>
+                  </select>
+                </div>
               </div>
 
               <button
                 onClick={() => setSelectedOrder(null)}
                 className="px-5 py-2 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors"
               >
-                Close Order Model
+                Close Order Modal
               </button>
             </div>
           </div>

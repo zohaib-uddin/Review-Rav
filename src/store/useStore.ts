@@ -168,6 +168,7 @@ export interface WarmChapter {
 
 interface StoreState {
   user: User | null;
+  adminUser: User | null;
   cart: CartItem[];
   wishlist: string[];
   products: Product[];
@@ -182,6 +183,7 @@ interface StoreState {
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, name: string, password: string) => Promise<boolean>;
   logout: () => void;
+  logoutAdmin: () => void;
   addToCart: (product: Product, size: string, color: string) => void;
   removeFromCart: (productId: string, size: string) => void;
   updateCartQuantity: (productId: string, size: string, quantity: number) => void;
@@ -196,6 +198,7 @@ interface StoreState {
   fetchCart: () => Promise<void>;
   addOrder: (order: Order) => void;
   updateOrderStatus: (orderId: string, status: string) => void;
+  updateOrderPaymentStatus: (orderId: string, payment_status: string) => void;
   updateProduct: (id: string, data: Partial<Product>) => void;
   addProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
@@ -207,6 +210,14 @@ export const useStore = create<StoreState>((set, get) => ({
     try {
       const savedUser = localStorage.getItem('ravenza_user');
       return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  })(),
+  adminUser: (() => {
+    try {
+      const savedAdmin = localStorage.getItem('ravenza_admin_user');
+      return savedAdmin ? JSON.parse(savedAdmin) : null;
     } catch {
       return null;
     }
@@ -307,6 +318,14 @@ export const useStore = create<StoreState>((set, get) => ({
     localStorage.removeItem('ravenza_user');
     // Clear screen cart on logout; persistent cart remains safely stored in Neon DB for next login
     set({ user: null, cart: [], wishlist: [] });
+  },
+
+  logoutAdmin: () => {
+    api.clearAdminToken();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ravenza_admin_user');
+    }
+    set({ adminUser: null });
   },
 
   addToCart: (product, size, color) => {
@@ -468,13 +487,24 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   fetchOrders: async () => {
-    const { user } = get();
+    const { user, adminUser } = get();
+    // If admin is authenticated or viewing admin portal, fetch all store orders
+    if (adminUser?.role === 'admin' || (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin'))) {
+      try {
+        const orders = await api.getOrders();
+        set({ orders: Array.isArray(orders) ? orders : [], apiAvailable: true });
+      } catch {
+        set({ orders: [], apiAvailable: false });
+      }
+      return;
+    }
+
     if (!user) {
       set({ orders: [] });
       return;
     }
     try {
-      const orders = await api.getOrders(user.role === 'admin' ? undefined : user.id);
+      const orders = await api.getOrders(user.id);
       set({ orders: Array.isArray(orders) ? orders : [], apiAvailable: true });
     } catch {
       set({ orders: [], apiAvailable: false });
@@ -506,8 +536,13 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   updateOrderStatus: (orderId, status) => {
-    set({ orders: get().orders.map(o => o.id === orderId ? { ...o, status } : o) });
+    set({ orders: get().orders.map(o => (o.id === orderId || o.order_number === orderId) ? { ...o, status } : o) });
     api.updateOrderStatus(orderId, status).catch(() => {});
+  },
+
+  updateOrderPaymentStatus: (orderId, payment_status) => {
+    set({ orders: get().orders.map(o => (o.id === orderId || o.order_number === orderId) ? { ...o, payment_status } : o) });
+    api.updateOrderPaymentStatus(orderId, payment_status).catch(() => {});
   },
 
   updateProduct: (id, data) => {

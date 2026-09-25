@@ -6,25 +6,45 @@ const API_BASE = (rawApiUrl && !rawApiUrl.includes('localhost:3001')) ? rawApiUr
 
 class ApiService {
   private token: string | null = null;
+  private adminToken: string | null = null;
 
   constructor() {
-    this.token = localStorage.getItem('ravenza_token');
+    this.token = typeof window !== 'undefined' ? localStorage.getItem('ravenza_token') : null;
+    this.adminToken = typeof window !== 'undefined' ? localStorage.getItem('ravenza_admin_token') : null;
   }
 
   setToken(token: string) {
     this.token = token;
-    localStorage.setItem('ravenza_token', token);
+    if (typeof window !== 'undefined') localStorage.setItem('ravenza_token', token);
   }
 
   clearToken() {
     this.token = null;
-    localStorage.removeItem('ravenza_token');
+    if (typeof window !== 'undefined') localStorage.removeItem('ravenza_token');
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  setAdminToken(token: string) {
+    this.adminToken = token;
+    if (typeof window !== 'undefined') localStorage.setItem('ravenza_admin_token', token);
+  }
+
+  clearAdminToken() {
+    this.adminToken = null;
+    if (typeof window !== 'undefined') localStorage.removeItem('ravenza_admin_token');
+  }
+
+  getEffectiveToken(): string | null {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+      return this.adminToken || localStorage.getItem('ravenza_admin_token') || this.token;
+    }
+    return this.token || (typeof window !== 'undefined' ? localStorage.getItem('ravenza_token') : null);
+  }
+
+  async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const effectiveToken = this.getEffectiveToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+      ...(effectiveToken && { Authorization: `Bearer ${effectiveToken}` }),
       ...options.headers,
     };
 
@@ -190,6 +210,13 @@ class ApiService {
     });
   }
 
+  async updateOrderPaymentStatus(id: string, payment_status: string) {
+    return this.request<any>(`/orders/${id}/payment-status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ payment_status }),
+    });
+  }
+
   // Cart
   async getCart(userId: string) {
     return this.request<any[]>(`/cart/${userId}`);
@@ -288,9 +315,13 @@ class ApiService {
     return this.request<any>(`/discounts/validate?code=${code}`);
   }
 
-  // Dashboard Stats
+  // Dashboard Stats & Pure Dynamic Analytics
   async getDashboardStats() {
     return this.request<any>('/admin/stats');
+  }
+
+  async getAnalytics(range: string = '30days') {
+    return this.request<any>(`/admin/analytics?range=${encodeURIComponent(range)}`);
   }
 
   // Audit Logs
@@ -347,6 +378,13 @@ class ApiService {
 
   async deleteNewsletterSubscriber(id: string) {
     return this.request<any>(`/newsletter/${id}`, { method: 'DELETE' });
+  }
+
+  async sendNewsletterThanks(email: string) {
+    return this.request<any>('/newsletter/send-thanks', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
   }
 
   // Email Campaigns

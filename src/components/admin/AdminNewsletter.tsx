@@ -26,10 +26,7 @@ export default function AdminNewsletter() {
   const handleSendThanks = async (email: string) => {
     try {
       setSendingThanksEmail(email);
-      await api.request('/newsletter/send-thanks', {
-        method: 'POST',
-        body: JSON.stringify({ email })
-      });
+      await api.sendNewsletterThanks(email);
       adminToast.success('Email Sent', `Thank you email successfully dispatched to ${email}`);
     } catch (err: any) {
       adminToast.error('Send Failed', err.message || 'Failed to send email');

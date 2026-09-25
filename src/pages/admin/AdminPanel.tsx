@@ -34,12 +34,12 @@ export default function AdminPanel() {
   const navigate = useNavigate();
   const { section } = useParams<{ section?: string }>();
   const { 
-    user, 
+    adminUser, 
     products, 
     orders, 
     categories, 
     reviews, 
-    logout, 
+    logoutAdmin, 
     fetchProducts, 
     fetchOrders, 
     fetchCategories 
@@ -61,12 +61,26 @@ export default function AdminPanel() {
     }
   }, [section]);
 
-  // Enforce Administrator role
+  // Enforce Administrator role - persists across page refreshes until explicit logout button is pressed
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
+    let hasAdmin = adminUser && adminUser.role === 'admin';
+    if (!hasAdmin && typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ravenza_admin_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.role === 'admin') {
+            useStore.setState({ adminUser: parsed });
+            hasAdmin = true;
+          }
+        }
+      } catch {}
+    }
+
+    if (!hasAdmin) {
       navigate('/admin/login', { replace: true });
     }
-  }, [user, navigate]);
+  }, [adminUser, navigate]);
 
   // Fetch all data from API on component mount
   useEffect(() => {
@@ -99,7 +113,7 @@ export default function AdminPanel() {
   const unreadNotifCount = notifications.filter(n => !n.is_read).length;
 
   const handleLogoutConfirm = () => {
-    logout();
+    logoutAdmin();
     navigate('/admin/login', { replace: true });
   };
 
@@ -255,12 +269,12 @@ export default function AdminPanel() {
 
             {/* Admin User Chip */}
             <div className="flex items-center gap-2.5 pl-3 border-l border-zinc-800">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">
-                A
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-700 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner uppercase">
+                {(adminUser?.name || adminUser?.email || 'A').charAt(0)}
               </div>
               <div className="hidden lg:block text-left leading-tight">
-                <div className="text-xs font-bold text-zinc-200">admin@ravenza.pk</div>
-                <div className="text-[10px] text-zinc-400">Super Administrator</div>
+                <div className="text-xs font-bold text-zinc-200">{adminUser?.email || 'admin@ravenza.pk'}</div>
+                <div className="text-[10px] text-zinc-400">{adminUser?.name || 'Master Administrator'}</div>
               </div>
             </div>
 

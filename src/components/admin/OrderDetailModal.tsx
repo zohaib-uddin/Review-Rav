@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { X, Mail, MessageCircle, Download, Truck, CreditCard } from 'lucide-react';
+import api from '../../services/api';
+import { useStore } from '../../store/useStore';
 
 interface OrderDetailModalProps {
   order: any;
@@ -8,19 +10,30 @@ interface OrderDetailModalProps {
 
 export default function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
   const [updating, setUpdating] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(order.status || 'pending');
+  const [currentPaymentStatus, setCurrentPaymentStatus] = useState(order.payment_status || 'unpaid');
 
   const handleStatusChange = async (newStatus: string) => {
     setUpdating(true);
+    setCurrentStatus(newStatus);
     try {
-      await fetch(`/api/orders/${order.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      alert('Order status updated!');
-      onClose();
+      await api.updateOrderStatus(order.id, newStatus);
+      useStore.getState().updateOrderStatus(order.id, newStatus);
     } catch (error) {
       console.error('Failed to update status:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handlePaymentStatusChange = async (newPaymentStatus: string) => {
+    setUpdating(true);
+    setCurrentPaymentStatus(newPaymentStatus);
+    try {
+      await api.updateOrderPaymentStatus(order.id, newPaymentStatus);
+      useStore.getState().updateOrderPaymentStatus(order.id, newPaymentStatus);
+    } catch (error) {
+      console.error('Failed to update payment status:', error);
     } finally {
       setUpdating(false);
     }
@@ -85,12 +98,13 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">Order Status</label>
               <select
-                value={order.status}
+                value={currentStatus}
                 onChange={(e) => handleStatusChange(e.target.value)}
                 disabled={updating}
-                className="w-full px-4 py-2 border rounded-lg"
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-black font-semibold"
               >
                 <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
                 <option value="processing">Processing</option>
                 <option value="shipped">Shipped</option>
                 <option value="delivered">Delivered</option>
@@ -99,7 +113,12 @@ export default function OrderDetailModal({ order, onClose }: OrderDetailModalPro
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-500 mb-1">Payment Status</label>
-              <select className="w-full px-4 py-2 border rounded-lg">
+              <select
+                value={currentPaymentStatus}
+                onChange={(e) => handlePaymentStatusChange(e.target.value)}
+                disabled={updating}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-black font-semibold uppercase"
+              >
                 <option value="unpaid">Unpaid</option>
                 <option value="paid">Paid</option>
                 <option value="refunded">Refunded</option>
