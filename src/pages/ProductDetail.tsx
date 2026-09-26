@@ -441,21 +441,7 @@ export default function ProductDetail() {
                 {product.name}
               </h1>
 
-              {/* Rating with bracket count (e.g. 4.9 (32)) near title */}
-              <div className="flex items-center gap-2.5 mt-3">
-                <div className="flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      size={15}
-                      className="fill-yellow-400 text-yellow-400"
-                    />
-                  ))}
-                </div>
-                <span className="text-xs font-bold text-black tracking-wide">
-                  4.9 <span className="text-gray-500 font-normal">(32 reviews)</span>
-                </span>
-              </div>
+        
 
               {/* Dynamic Price Display */}
               <div className="flex items-baseline gap-3 mt-4">
@@ -606,7 +592,7 @@ export default function ProductDetail() {
                   </button>
                 </div>
                 <p className="text-xs text-green-700 mt-2 font-medium">
-                  ✓ In Stock ready for immediate dispatch
+                  ✓ In Stock
                 </p>
               </div>
 
@@ -846,15 +832,58 @@ export default function ProductDetail() {
                   </AnimatePresence>
                 </div>
 
-                {/* Care Instructions */}
-                <div className="border-t border-gray-200 pt-4">
-                  <CareInstructions
-                    careInstructions={
-                      product.care_instructions ||
-                      'Machine wash cold with like colors. Do not bleach. Tumble dry low. Iron inside out.'
-                    }
-                  />
+                             {/* Custom Care Instructions Grid - Matching Image Style */}
+              <div className="mt-8 border-t border-gray-100 pt-6">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-black mb-5 text-center">
+                  Care Instructions
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl mx-auto">
+                  {/* Icon 1: No Iron on Print */}
+                  <div className="flex flex-col items-center gap-2 group">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-neutral-800">
+                        <path d="M12 3v18m-6-6h12M6 9l6-6 6 6" />
+                        <path d="M16 16a2 2 0 1 0-4 0 2 2 0 0 0 4 0Z" strokeDasharray="2 2" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-medium text-neutral-600 text-center leading-tight">No Iron on Print</span>
+                  </div>
+
+                  {/* Icon 2: Hand Wash Only */}
+                  <div className="flex flex-col items-center gap-2 group">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-neutral-800">
+                        <path d="M12 21a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 10.1 5 12 5 14a7 7 0 0 0 7 7z" />
+                        <path d="M12 14v7" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-medium text-neutral-600 text-center leading-tight">Hand Wash Only</span>
+                  </div>
+
+                  {/* Icon 3: Use Mild Detergent */}
+                  <div className="flex flex-col items-center gap-2 group">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-neutral-800">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 8v4l3 3" />
+                        <path d="M8 12h8" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-medium text-neutral-600 text-center leading-tight">Use Mild Detergent</span>
+                  </div>
+
+                  {/* Icon 4: Dry Inside Out */}
+                  <div className="flex flex-col items-center gap-2 group">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-neutral-800">
+                        <path d="M20.38 3.46L16 2 12 5 8 2 3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z" />
+                        <path d="M12 10v10" />
+                      </svg>
+                    </div>
+                    <span className="text-[11px] font-medium text-neutral-600 text-center leading-tight">Dry Inside Out</span>
+                  </div>
                 </div>
+              </div>
               </div>
 
               {/* STATIC PAKISTANI CUSTOMER REVIEWS SECTION (Placed after care instructions and before You may also like) */}
@@ -863,9 +892,26 @@ export default function ProductDetail() {
                   <h3 className="font-bold text-sm uppercase tracking-wider text-black">
                     Verified Pakistani Customer Reviews
                   </h3>
-                  <div className="flex items-center gap-1">
-                    <Star size={14} className="fill-yellow-400 text-yellow-400" />
-                    <span className="text-xs font-bold text-black">4.9 / 5.0</span>
+                                   {/* Updated Rating Stars: 4 Full + 1 Half */}
+                  <div className="flex items-center gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        size={14}
+                        className={
+                          i < 4
+                            ? 'fill-yellow-400 text-yellow-400' // First 4 stars: Full Yellow
+                            : 'text-gray-300 relative overflow-hidden' // Last star: Base Gray
+                        }
+                      >
+                        {/* Half-fill overlay for the 5th star only */}
+                        {i === 4 && (
+                          <div className="absolute inset-0 w-1/2 bg-yellow-400 overflow-hidden">
+                            <Star size={14} className="fill-yellow-400 text-yellow-400 absolute top-0 left-0" />
+                          </div>
+                        )}
+                      </Star>
+                    ))}  <span className="text-xs font-bold text-black">4.9 / 5.0</span>
                   </div>
                 </div>
 

@@ -51,21 +51,6 @@ export default function AnalyticsDashboard() {
 
   // Compute analytics dynamically from server response, or fallback using store
   const computedData = useMemo(() => {
-    if (serverAnalytics) {
-      return {
-        revenue: serverAnalytics.totalRevenue ?? 0,
-        orders: serverAnalytics.totalOrders ?? 0,
-        customers: serverAnalytics.activeCustomers ?? 1,
-        avgOrderValue: serverAnalytics.avgOrderValue ?? 0,
-        revenueData: serverAnalytics.revenueProgression || [],
-        ordersData: serverAnalytics.orderVolume || [],
-        categoryData: serverAnalytics.categoryRevenue || [],
-        productData: serverAnalytics.productRevenue || [],
-        topProducts: serverAnalytics.topProducts || [],
-      };
-    }
-
-    // Client-side fallback if server is offline
     const now = new Date();
     const daysLimit = dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : dateRange === '90days' ? 90 : 3650;
     const cutoffDate = new Date(now.getTime() - daysLimit * 24 * 60 * 60 * 1000);
@@ -126,17 +111,34 @@ export default function AnalyticsDashboard() {
       const items = Array.isArray(o.items) ? o.items : [];
 
       items.forEach((item: any) => {
-        const qty = Number(item.quantity) || 1;
-        const itemPrice = Number(item.price || item.unit_price) || 0;
-        const itemTotal = itemPrice * qty;
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        const prodObj = item.product || {};
+        const prod = products.find(p => 
+          p.id === (item.product_id || prodObj.id || item.id) || 
+          p.slug === (item.slug || prodObj.slug) ||
+          p.name === (item.name || prodObj.name || item.product_name)
+        );
 
-        const prod = products.find(p => p.id === (item.product_id || item.product?.id || item.id) || p.slug === item.slug);
-        
+        const itemPrice = Number(
+          item.price || 
+          item.unit_price || 
+          prodObj.salePrice || 
+          prodObj.price || 
+          prodObj.base_price || 
+          prod?.base_price || 
+          (item.total_price ? Number(item.total_price) / qty : 0)
+        ) || 0;
+
+        const itemTotal = (item.total_price && Number(item.total_price) > 0)
+          ? Number(item.total_price)
+          : (itemPrice * qty);
+
         let cat = 'Streetwear';
         if (prod?.category_name) cat = prod.category_name;
         else if (prod?.category_id && catLookup.has(prod.category_id)) cat = catLookup.get(prod.category_id)!;
         else if (prod?.category) cat = prod.category;
         else if (item.category) cat = item.category;
+        else if (prodObj.category) cat = prodObj.category;
 
         if (!categoryMap[cat]) {
           categoryMap[cat] = { name: cat, revenue: 0, units: 0, orderIds: new Set() };
@@ -145,12 +147,12 @@ export default function AnalyticsDashboard() {
         categoryMap[cat].units += qty;
         categoryMap[cat].orderIds.add(orderId);
 
-        const prodName = item.product?.name || item.name || prod?.name || 'Streetwear Garment';
-        const prodImg = prod?.image || prod?.images?.[0] || item.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
+        const prodName = prodObj.name || item.product_name || item.name || prod?.name || 'Streetwear Garment';
+        const prodImg = prod?.image || prod?.images?.[0] || prodObj.image || prodObj.images?.[0] || item.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
 
         if (!productSalesMap[prodName]) {
           productSalesMap[prodName] = { 
-            id: prod?.id || item.product_id || `prod-${Math.random()}`, 
+            id: prod?.id || item.product_id || prodObj.id || `prod-${Math.random()}`, 
             name: prodName, 
             sales: 0, 
             units: 0,
@@ -176,9 +178,17 @@ export default function AnalyticsDashboard() {
         orders_count: c.orderIds.size,
         percentage: Math.round((c.revenue / totalCatRevenue) * 100),
       }))
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => {
+        // Sort by revenue descending, then units descending (highest on top #1)
+        if (b.value !== a.value) return b.value - a.value;
+        return b.units - a.units;
+      });
 
-    const productList = Object.values(productSalesMap).sort((a, b) => b.units !== a.units ? b.units - a.units : b.revenue - a.revenue);
+    const productList = Object.values(productSalesMap).sort((a, b) => {
+      // Sort by combined revenue and units (highest revenue & sold on top #1)
+      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+      return b.units - a.units;
+    });
     const totalProdRev = productList.reduce((s, p) => s + p.revenue, 0) || revenue || 1;
 
     const productData = productList.map(p => ({
@@ -192,7 +202,7 @@ export default function AnalyticsDashboard() {
       category: p.category,
     }));
 
-    const finalTopProducts = productList.slice(0, 8).map(p => ({
+    const finalTopProducts = productList.slice(0, 10).map(p => ({
       name: p.name,
       category: p.category,
       sales: p.units,
@@ -201,6 +211,55 @@ export default function AnalyticsDashboard() {
       orders_count: p.orderIds.size,
       image: p.image,
     }));
+
+    // If server analytics returned data, blend to preserve server totals while guaranteeing units & categories are accurate
+    if (serverAnalytics) {
+      const srvCat = Array.isArray(serverAnalytics.categoryRevenue) && serverAnalytics.categoryRevenue.length > 0 
+        ? serverAnalytics.categoryRevenue.map((sc: any) => {
+            const localMatch = categoryData.find(c => c.name.toLowerCase() === sc.name?.toLowerCase());
+            return {
+              ...sc,
+              units: (sc.units && sc.units > 0) ? sc.units : (localMatch?.units || 1),
+              value: Number(sc.value ?? sc.revenue ?? localMatch?.value ?? 0),
+            };
+          }).sort((a: any, b: any) => b.value !== a.value ? b.value - a.value : b.units - a.units)
+        : categoryData;
+
+      const srvProd = Array.isArray(serverAnalytics.productRevenue) && serverAnalytics.productRevenue.length > 0
+        ? serverAnalytics.productRevenue.map((sp: any) => {
+            const localMatch = productData.find(p => p.name.toLowerCase() === sp.name?.toLowerCase());
+            return {
+              ...sp,
+              value: Number(sp.value ?? sp.revenue ?? localMatch?.value ?? 0),
+              units: (sp.units && sp.units > 0) ? sp.units : (localMatch?.units || sp.sales || 1),
+            };
+          }).sort((a: any, b: any) => b.value !== a.value ? b.value - a.value : b.units - a.units)
+        : productData;
+
+      const srvTop = Array.isArray(serverAnalytics.topProducts) && serverAnalytics.topProducts.length > 0
+        ? serverAnalytics.topProducts.map((tp: any) => {
+            const localMatch = finalTopProducts.find(p => p.name.toLowerCase() === tp.name?.toLowerCase());
+            return {
+              ...tp,
+              revenue: Number(tp.revenue ?? tp.value ?? localMatch?.revenue ?? 0),
+              units: Number(tp.units ?? tp.sales ?? localMatch?.units ?? 1),
+              sales: Number(tp.sales ?? tp.units ?? localMatch?.sales ?? 1),
+            };
+          }).sort((a: any, b: any) => b.revenue !== a.revenue ? b.revenue - a.revenue : b.units - a.units)
+        : finalTopProducts;
+
+      return {
+        revenue: serverAnalytics.totalRevenue ?? revenue,
+        orders: serverAnalytics.totalOrders ?? ordersCount,
+        customers: serverAnalytics.activeCustomers ?? uniqueCustomers,
+        avgOrderValue: serverAnalytics.avgOrderValue ?? avgOrderValue,
+        revenueData: (serverAnalytics.revenueProgression && serverAnalytics.revenueProgression.length > 0) ? serverAnalytics.revenueProgression : revenueData,
+        ordersData: (serverAnalytics.orderVolume && serverAnalytics.orderVolume.length > 0) ? serverAnalytics.orderVolume : ordersData,
+        categoryData: srvCat,
+        productData: srvProd,
+        topProducts: srvTop,
+      };
+    }
 
     return {
       revenue,
@@ -542,108 +601,101 @@ export default function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* Animated Donut / Radius Circle with Center Stat */}
-          <div className="h-64 w-full flex items-center justify-center relative my-2">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={distributionTab}
-                initial={{ opacity: 0, scale: 0.8, rotate: -60 }}
-                animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                exit={{ opacity: 0, scale: 0.8, rotate: 60 }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-                className="w-full h-full relative"
-              >
-                {activeDonutData && activeDonutData.length > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={activeDonutData}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={95}
-                          innerRadius={62}
-                          paddingAngle={3}
-                          dataKey="value"
-                          nameKey="name"
-                          stroke="#ffffff"
-                          strokeWidth={2}
-                          isAnimationActive={true}
-                          animationBegin={0}
-                          animationDuration={1000}
-                          animationEasing="ease-out"
-                        >
-                          {activeDonutData.map((_, index) => (
-                            <Cell 
-                              key={`cell-${distributionTab}-${index}`} 
-                              fill={PALETTE[index % PALETTE.length]} 
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-zinc-950 text-white p-3 rounded-xl shadow-xl border border-zinc-800 text-xs space-y-1">
-                                  <p className="font-bold text-white text-xs">{data.name}</p>
-                                  {data.category && (
-                                    <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">
-                                      {data.category}
-                                    </p>
-                                  )}
-                                  <div className="pt-1 border-t border-zinc-800 space-y-0.5 text-[11px]">
-                                    <p className="text-emerald-400 font-mono font-bold">
-                                      Revenue: Rs. {Number(data.value).toLocaleString()}
-                                    </p>
-                                    <p className="text-zinc-300">
-                                      Units Ordered: <strong className="text-white">{data.units || data.sales || 0} units</strong>
-                                    </p>
-                                    {data.orders_count !== undefined && (
-                                      <p className="text-zinc-400">
-                                        In Orders: <strong className="text-white">{data.orders_count} orders</strong>
-                                      </p>
-                                    )}
-                                    <p className="text-zinc-400">
-                                      Share: <strong className="text-white">{data.percentage || 0}%</strong>
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
+          {/* Clean Radius Circle / Pie Distribution Chart with Center Summary */}
+          <div className="h-68 w-full flex items-center justify-center relative my-2">
+            {activeDonutData && activeDonutData.length > 0 ? (
+              <div className="w-full h-full relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={activeDonutData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      innerRadius={66}
+                      paddingAngle={2.5}
+                      dataKey="value"
+                      nameKey="name"
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    >
+                      {activeDonutData.map((_, index) => (
+                        <Cell 
+                          key={`cell-${distributionTab}-${index}`} 
+                          fill={PALETTE[index % PALETTE.length]} 
                         />
-                      </PieChart>
-                    </ResponsiveContainer>
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          const rev = Number(data.value || data.revenue || 0);
+                          const units = data.units || data.sales || 0;
+                          const pct = totalRevenueInView > 0 ? Math.round((rev / totalRevenueInView) * 100) : (data.percentage || 0);
+                          return (
+                            <div className="bg-zinc-950 text-white p-3 rounded-xl shadow-2xl border border-zinc-800 text-xs space-y-1 z-50">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: payload[0].color }} />
+                                <p className="font-bold text-white text-xs">{data.name}</p>
+                              </div>
+                              {data.category && distributionTab === 'product' && (
+                                <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">
+                                  Category: {data.category}
+                                </p>
+                              )}
+                              <div className="pt-1 border-t border-zinc-800 space-y-0.5 text-[11px]">
+                                <p className="text-emerald-400 font-mono font-bold">
+                                  Total Revenue: Rs. {rev.toLocaleString()}
+                                </p>
+                                <p className="text-zinc-300">
+                                  Units Sold: <strong className="text-white">{units} {units === 1 ? 'unit' : 'units'}</strong>
+                                </p>
+                                {data.orders_count !== undefined && (
+                                  <p className="text-zinc-400">
+                                    Orders: <strong className="text-white">{data.orders_count} orders</strong>
+                                  </p>
+                                )}
+                                <p className="text-zinc-400">
+                                  Revenue Share: <strong className="text-emerald-400">{pct}%</strong>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
 
-                    {/* Donut Center Overlay Info */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                        {distributionTab === 'category' ? 'Total Units' : 'Units Sold'}
-                      </span>
-                      <span className="text-xl font-black font-display text-gray-900 leading-tight">
-                        {totalUnitsInView.toLocaleString()}
-                      </span>
-                      <span className="text-[10px] font-semibold text-emerald-600 font-mono">
-                        Rs. {(totalRevenueInView / 1000).toFixed(0)}k total
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-gray-400">
-                    No transactions recorded for this period.
-                  </div>
-                )}
-              </motion.div>
-            </AnimatePresence>
+                {/* Donut Center Overlay Info */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    {distributionTab === 'category' ? 'Category Units' : 'Product Units'}
+                  </span>
+                  <span className="text-2xl font-black font-display text-gray-900 leading-tight">
+                    {totalUnitsInView.toLocaleString()}
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-600 font-mono">
+                    Rs. {totalRevenueInView.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-gray-400">
+                No transactions recorded for this period.
+              </div>
+            )}
           </div>
 
           {/* Dynamic Breakdown List / Slices Details */}
-          <div className="space-y-2 pt-3 border-t border-gray-100 max-h-48 overflow-y-auto pr-1">
-            {activeDonutData.slice(0, 6).map((item: any, idx: number) => {
+          <div className="space-y-2 pt-3 border-t border-gray-100 max-h-52 overflow-y-auto pr-1">
+            {activeDonutData.map((item: any, idx: number) => {
               const units = item.units || item.sales || 0;
-              const percentage = item.percentage || 0;
+              const revenue = Number(item.value || item.revenue || 0);
+              const percentage = totalRevenueInView > 0 ? Math.round((revenue / totalRevenueInView) * 100) : (item.percentage || 0);
               const color = PALETTE[idx % PALETTE.length];
 
               return (
@@ -663,7 +715,7 @@ export default function AnalyticsDashboard() {
                     </div>
                     <div className="text-right shrink-0">
                       <span className="font-black font-mono text-gray-900 text-xs">
-                        Rs. {Number(item.value).toLocaleString()}
+                        Rs. {revenue.toLocaleString()}
                       </span>
                       <span className="text-[11px] text-gray-500 font-semibold ml-2">
                         ({units} {units === 1 ? 'unit' : 'units'})
@@ -673,13 +725,13 @@ export default function AnalyticsDashboard() {
 
                   {/* Contribution Progress Bar */}
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                       <div 
                         className="h-full rounded-full transition-all duration-500" 
-                        style={{ width: `${Math.max(percentage, 3)}%`, backgroundColor: color }}
+                        style={{ width: `${Math.min(100, Math.max(percentage, units > 0 ? 3 : 0))}%`, backgroundColor: color }}
                       />
                     </div>
-                    <span className="text-[10px] font-bold text-gray-500 font-mono w-7 text-right">
+                    <span className="text-[10px] font-bold text-gray-600 font-mono w-8 text-right">
                       {percentage}%
                     </span>
                   </div>

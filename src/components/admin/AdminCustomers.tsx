@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Users, Mail, Phone, Calendar, ShoppingBag, DollarSign, 
   CheckCircle2, Search, RefreshCw, ArrowUpRight, TrendingUp,
   Award, Filter, ShieldCheck
 } from 'lucide-react';
+import { useStore } from '../../store/useStore';
 
 interface Customer {
   id: string;
@@ -19,6 +20,7 @@ interface Customer {
 }
 
 export default function AdminCustomers() {
+  const { orders, fetchOrders } = useStore();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +29,7 @@ export default function AdminCustomers() {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
+      fetchOrders().catch(() => {});
       const res = await fetch('/api/admin/customers');
       if (res.ok) {
         const data = await res.json();
@@ -43,17 +46,57 @@ export default function AdminCustomers() {
     fetchCustomers();
   }, []);
 
-  const totalSpentAll = customers.reduce((sum, c) => sum + (Number(c.total_spent) || 0), 0);
-  const totalOrdersAll = customers.reduce((sum, c) => sum + (Number(c.orders_count) || 0), 0);
-  const customersWithOrders = customers.filter(c => Number(c.orders_count) > 0);
-  const verifiedCount = customers.filter(c => c.is_verified).length;
+  // Enrich customers with placed orders from store to guarantee 100% total spent accuracy
+  const enrichedCustomers = useMemo(() => {
+    return customers.map(cust => {
+      const custEmail = (cust.email || '').toLowerCase().trim();
+      const custPhone = (cust.phone || '').replace(/\D/g, '');
+
+      const matchedOrders = orders.filter(o => {
+        const oUserId = String(o.user_id || '');
+        const oEmail = String(o.shipping_address?.email || (o as any).email || '').toLowerCase().trim();
+        const oPhone = String(o.shipping_address?.phone || '').replace(/\D/g, '');
+
+        return (
+          (oUserId && (oUserId === cust.id || oUserId === cust.email)) ||
+          (custEmail && oEmail && oEmail === custEmail) ||
+          (custPhone && oPhone && oPhone.length >= 7 && (custPhone.includes(oPhone) || oPhone.includes(custPhone)))
+        );
+      });
+
+      const storeSpent = matchedOrders.reduce((sum, o) => {
+        const tot = Number(o.total);
+        if (!isNaN(tot) && tot > 0) return sum + tot;
+        const sub = Number(o.subtotal) || 0;
+        const disc = Number(o.discount_amount) || 0;
+        const ship = Number(o.shipping_cost) || 0;
+        return sum + Math.max(0, sub - disc + ship);
+      }, 0);
+
+      const serverSpent = Number(cust.total_spent) || 0;
+      const finalSpent = Math.max(serverSpent, storeSpent);
+      const serverCount = Number(cust.orders_count) || 0;
+      const finalCount = Math.max(serverCount, matchedOrders.length);
+
+      return {
+        ...cust,
+        orders_count: finalCount,
+        total_spent: finalSpent,
+      };
+    });
+  }, [customers, orders]);
+
+  const totalSpentAll = enrichedCustomers.reduce((sum, c) => sum + (Number(c.total_spent) || 0), 0);
+  const totalOrdersAll = enrichedCustomers.reduce((sum, c) => sum + (Number(c.orders_count) || 0), 0);
+  const customersWithOrders = enrichedCustomers.filter(c => Number(c.orders_count) > 0);
+  const verifiedCount = enrichedCustomers.filter(c => c.is_verified).length;
   
   // Dynamic Customer Lifetime Value (LTV):
   // Average revenue contributed per registered customer across order history
-  const averageLTV = customers.length > 0 ? Math.round(totalSpentAll / customers.length) : 0;
+  const averageLTV = enrichedCustomers.length > 0 ? Math.round(totalSpentAll / enrichedCustomers.length) : 0;
   const buyerLTV = customersWithOrders.length > 0 ? Math.round(totalSpentAll / customersWithOrders.length) : 0;
 
-  const filteredCustomers = customers.filter(c => {
+  const filteredCustomers = enrichedCustomers.filter(c => {
     const matchesSearch = 
       (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (c.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

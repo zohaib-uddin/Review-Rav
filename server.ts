@@ -1504,6 +1504,13 @@ function formatProduct(p: any, catMap: Map<string, any>) {
       : [p.image_url || p.image || 'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=800&h=1000&fit=crop']);
   const firstImage = images.length > 0 ? images[0] : (p.image_url || p.image || '');
 
+  const rawAttributes = typeof p.attributes === 'string'
+    ? (() => { try { return JSON.parse(p.attributes); } catch { return {}; } })()
+    : (p.attributes || {});
+  const rawVariantsMatrix = typeof p.variants_matrix === 'string'
+    ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })()
+    : (Array.isArray(p.variants_matrix) ? p.variants_matrix : []);
+
   const isBestseller = Boolean(p.is_best_seller ?? p.is_bestseller ?? p.isBestseller ?? false);
   const isNew = Boolean(p.is_new_arrival ?? p.isNew ?? false);
   const isFeatured = Boolean(p.is_featured ?? p.isFeatured ?? false);
@@ -1526,14 +1533,13 @@ function formatProduct(p: any, catMap: Map<string, any>) {
     subcategory_slug: subcategory?.slug || p.subcategory_slug || null,
     subcategory_name: subcategory?.name || p.subcategory_name || null,
     category: category?.slug || p.category_slug || p.category || 'uncategorized',
-    sizes: p.attributes?.sizes || ['S', 'M', 'L', 'XL'],
-    colors: p.attributes?.colors || ['Black'],
+    attributes: rawAttributes,
+    variants_matrix: rawVariantsMatrix,
+    sizes: rawAttributes?.sizes || ['S', 'M', 'L', 'XL'],
+    colors: rawAttributes?.colors || ['Black'],
     stockCount: (() => {
-      const matrix = Array.isArray(p.variants_matrix) 
-        ? p.variants_matrix 
-        : (typeof p.variants_matrix === 'string' ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })() : []);
-      if (matrix && matrix.length > 0) {
-        return matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
+      if (rawVariantsMatrix && rawVariantsMatrix.length > 0) {
+        return rawVariantsMatrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0);
       }
       if (typeof p.stockCount === 'number') return p.stockCount;
       if (typeof p.stock === 'number') return p.stock;
@@ -1541,11 +1547,8 @@ function formatProduct(p: any, catMap: Map<string, any>) {
     })(),
     low_stock_threshold: Number(p.low_stock_threshold ?? 4),
     inStock: (() => {
-      const matrix = Array.isArray(p.variants_matrix) 
-        ? p.variants_matrix 
-        : (typeof p.variants_matrix === 'string' ? (() => { try { return JSON.parse(p.variants_matrix); } catch { return []; } })() : []);
-      if (matrix && matrix.length > 0) {
-        return matrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0) > 0;
+      if (rawVariantsMatrix && rawVariantsMatrix.length > 0) {
+        return rawVariantsMatrix.reduce((sum: number, v: any) => sum + (Number(v.stock) || 0), 0) > 0;
       }
       const count = typeof p.stockCount === 'number' ? p.stockCount : (typeof p.stock === 'number' ? p.stock : 50);
       return count > 0;
@@ -4384,13 +4387,32 @@ app.use((err: any, req: any, res: any, next: any) => {
 
       rangeOrders.forEach((o: any) => {
         const orderId = String(o.id || o.order_number || Math.random());
-        const items = Array.isArray(o.items) ? o.items : (typeof o.items === 'string' ? (() => { try { return JSON.parse(o.items || '[]'); } catch { return []; } })() : []);
+        const items = Array.isArray(o.items) 
+          ? o.items 
+          : (typeof o.items === 'string' ? (() => { try { return JSON.parse(o.items || '[]'); } catch { return []; } })() : []);
+
         items.forEach((item: any) => {
-          const qty = Number(item.quantity) || 1;
-          const price = Number(item.price || item.unit_price) || 0;
-          const itemTotal = price * qty;
-          const prodId = item.product_id || item.product?.id || item.id;
-          const matchedProd = productsStore.find((p) => p.id === prodId || p.slug === item.slug || p.name === item.name);
+          const qty = Math.max(1, Number(item.quantity) || 1);
+          const prodObj = item.product || {};
+          const matchedProd = productsStore.find((p) => 
+            p.id === (item.product_id || prodObj.id || item.id) || 
+            p.slug === (item.slug || prodObj.slug) || 
+            p.name === (item.name || prodObj.name || item.product_name)
+          );
+
+          const price = Number(
+            item.unit_price || 
+            item.price || 
+            prodObj.salePrice || 
+            prodObj.price || 
+            prodObj.base_price || 
+            matchedProd?.base_price || 
+            (item.total_price ? Number(item.total_price) / qty : 0)
+          ) || 0;
+
+          const itemTotal = (item.total_price && Number(item.total_price) > 0) 
+            ? Number(item.total_price) 
+            : (price * qty);
 
           let catName = 'Streetwear';
           let catId = matchedProd?.category_id || 'cat-general';
@@ -4398,6 +4420,7 @@ app.use((err: any, req: any, res: any, next: any) => {
           else if (matchedProd?.category_id && catLookup.has(matchedProd.category_id)) catName = catLookup.get(matchedProd.category_id)!;
           else if (matchedProd?.category) catName = matchedProd.category;
           else if (item.category) catName = item.category;
+          else if (prodObj.category) catName = prodObj.category;
 
           if (!categoryMap[catName]) {
             categoryMap[catName] = { id: catId, name: catName, revenue: 0, units: 0, orderIds: new Set() };
@@ -4406,12 +4429,12 @@ app.use((err: any, req: any, res: any, next: any) => {
           categoryMap[catName].units += qty;
           categoryMap[catName].orderIds.add(orderId);
 
-          const prodName = matchedProd?.name || item.product_name || item.name || 'Streetwear Garment';
-          const prodImage = matchedProd?.image_url || matchedProd?.image || matchedProd?.images?.[0] || item.image || item.product?.images?.[0] || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
+          const prodName = matchedProd?.name || prodObj.name || item.product_name || item.name || 'Streetwear Garment';
+          const prodImage = matchedProd?.image_url || matchedProd?.image || matchedProd?.images?.[0] || prodObj.image || prodObj.images?.[0] || item.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop';
 
           if (!productMap[prodName]) {
             productMap[prodName] = {
-              id: matchedProd?.id || prodId || `prod-${Math.random()}`,
+              id: matchedProd?.id || item.product_id || prodObj.id || `prod-${Math.random()}`,
               name: prodName,
               category: catName,
               units: 0,
@@ -4428,70 +4451,6 @@ app.use((err: any, req: any, res: any, next: any) => {
         });
       });
 
-      // Incorporate order_items table from Neon DB if connected
-      if (sql) {
-        try {
-          const dbItemRows = await sql`
-            SELECT 
-              oi.product_id,
-              oi.product_name,
-              c.name as category_name,
-              c.id as category_id,
-              COALESCE(p.image_url, (p.images->>0), '') as image,
-              p.base_price,
-              oi.order_id,
-              oi.quantity,
-              oi.unit_price,
-              oi.total_price
-            FROM order_items oi
-            JOIN orders o ON oi.order_id = o.id
-            LEFT JOIN products p ON oi.product_id = p.id
-            LEFT JOIN categories c ON p.category_id = c.id
-            WHERE o.created_at >= ${cutoff}
-          `;
-          if (dbItemRows && dbItemRows.length > 0) {
-            dbItemRows.forEach((row: any) => {
-              const orderId = String(row.order_id);
-              const prodName = row.product_name || 'Streetwear Garment';
-              const catName = row.category_name || 'Streetwear';
-              const catId = row.category_id || 'cat-general';
-              const qty = Number(row.quantity) || 1;
-              const unitPrice = Number(row.unit_price) || 0;
-              const rowTotal = Number(row.total_price) || (qty * unitPrice);
-
-              if (!categoryMap[catName]) {
-                categoryMap[catName] = { id: catId, name: catName, revenue: 0, units: 0, orderIds: new Set() };
-              }
-              if (!categoryMap[catName].orderIds.has(orderId)) {
-                categoryMap[catName].revenue += rowTotal;
-                categoryMap[catName].units += qty;
-                categoryMap[catName].orderIds.add(orderId);
-              }
-
-              if (!productMap[prodName]) {
-                productMap[prodName] = {
-                  id: row.product_id,
-                  name: prodName,
-                  category: catName,
-                  units: 0,
-                  revenue: 0,
-                  image: row.image || 'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&h=1000&fit=crop',
-                  unit_price: unitPrice || Number(row.base_price) || 0,
-                  orderIds: new Set()
-                };
-              }
-              if (!productMap[prodName].orderIds.has(orderId)) {
-                productMap[prodName].units += qty;
-                productMap[prodName].revenue += rowTotal;
-                productMap[prodName].orderIds.add(orderId);
-              }
-            });
-          }
-        } catch (dbItemsErr) {
-          console.warn('order_items SQL query note:', dbItemsErr);
-        }
-      }
-
       const totalCatRevenue = Object.values(categoryMap).reduce((s, c) => s + c.revenue, 0) || totalRevenue || 1;
       const categoryRevenue = Object.values(categoryMap)
         .map((c) => ({
@@ -4502,9 +4461,17 @@ app.use((err: any, req: any, res: any, next: any) => {
           orders_count: c.orderIds.size,
           percentage: Math.round((c.revenue / totalCatRevenue) * 100),
         }))
-        .sort((a, b) => b.value - a.value);
+        .sort((a, b) => {
+          // Sort by combined revenue and units ratio (highest revenue & sold on top #1)
+          if (b.value !== a.value) return b.value - a.value;
+          return b.units - a.units;
+        });
 
-      const topProductsList = Object.values(productMap).sort((a, b) => b.units !== a.units ? b.units - a.units : b.revenue - a.revenue);
+      const topProductsList = Object.values(productMap).sort((a, b) => {
+        // Sort by combined revenue and units ratio (highest on top #1)
+        if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+        return b.units - a.units;
+      });
       const totalProdRevenue = topProductsList.reduce((s, p) => s + p.revenue, 0) || totalRevenue || 1;
 
       const productRevenue = topProductsList.map((p) => ({
@@ -4520,7 +4487,7 @@ app.use((err: any, req: any, res: any, next: any) => {
         unit_price: p.unit_price,
       }));
 
-      const topPerformingProducts = topProductsList.slice(0, 8).map((p) => ({
+      const topPerformingProducts = topProductsList.slice(0, 10).map((p) => ({
         product_id: p.id,
         name: p.name,
         category: p.category,
@@ -5056,11 +5023,37 @@ app.use((err: any, req: any, res: any, next: any) => {
               role: insertedUser[0].role || 'customer',
               is_verified: true,
             };
+            try {
+              await sql`
+                INSERT INTO notifications (user_id, title, message, type, link, is_read, created_at)
+                VALUES (
+                  ${userRecord.id},
+                  'New Customer Joined',
+                  ${(userRecord.name || 'New Customer') + ' (' + userRecord.email + ') verified and joined.'},
+                  'user',
+                  'customers',
+                  false,
+                  NOW()
+                )
+              `;
+            } catch (notifErr: any) {
+              console.warn('OTP notification insert note:', notifErr.message);
+            }
           }
         } catch (e) {
           console.warn('Neon auto-register user note:', e);
         }
       }
+
+      adminNotificationsStore.unshift({
+        id: `notif-user-${Date.now()}`,
+        title: 'New Customer Joined',
+        message: `${userRecord.name || userRecord.email} verified and joined Ravenza.`,
+        type: 'user',
+        link: 'customers',
+        is_read: false,
+        created_at: new Date().toISOString()
+      });
 
       usersStore.push(userRecord as any);
     }
@@ -5486,12 +5479,16 @@ app.use((err: any, req: any, res: any, next: any) => {
               u.is_active, 
               u.created_at,
               COUNT(DISTINCT o.id)::int as orders_count,
-              COALESCE(SUM(o.total::numeric), 0)::numeric(10,2) as total_spent
+              COALESCE(SUM(
+                CASE 
+                  WHEN o.total IS NOT NULL AND o.total::numeric > 0 THEN o.total::numeric
+                  ELSE GREATEST(0, COALESCE(o.subtotal::numeric, 0) - COALESCE(o.discount_amount::numeric, 0) + COALESCE(o.shipping_cost::numeric, 0))
+                END
+              ), 0)::numeric(10,2) as total_spent
             FROM users u
             LEFT JOIN orders o ON (
-              o.user_id = u.id 
-              OR LOWER(o.shipping_address->>'email') = LOWER(u.email)
-              OR o.user_id::text = u.email
+              (o.user_id IS NOT NULL AND (o.user_id = u.id OR o.user_id::text = u.id::text OR o.user_id::text = u.email))
+              OR (o.shipping_address IS NOT NULL AND LOWER(COALESCE(o.shipping_address->>'email', '')) = LOWER(u.email))
             )
             WHERE u.role = 'customer' OR u.role IS NULL
             GROUP BY u.id, u.name, u.email, u.phone, u.role, u.is_verified, u.is_active, u.created_at
@@ -5515,8 +5512,20 @@ app.use((err: any, req: any, res: any, next: any) => {
           console.error('Neon customers query error:', e);
         }
       }
-      res.json(usersStore.filter(u => u.role === 'customer').map(u => {
-        const uOrders = ordersStore.filter(o => o.user_id === u.id || o.shipping_address?.email?.toLowerCase() === u.email?.toLowerCase());
+      const allOrders = ordersStore || [];
+      res.json(usersStore.filter(u => u.role === 'customer' || !u.role).map(u => {
+        const uOrders = allOrders.filter(o => 
+          (o.user_id && (o.user_id === u.id || o.user_id === u.email)) ||
+          (o.shipping_address?.email && o.shipping_address.email.toLowerCase() === u.email?.toLowerCase())
+        );
+        const spent = uOrders.reduce((sum, o) => {
+          const tot = Number(o.total);
+          if (!isNaN(tot) && tot > 0) return sum + tot;
+          const sub = Number(o.subtotal) || 0;
+          const disc = Number(o.discount_amount) || 0;
+          const ship = Number(o.shipping_cost) || 0;
+          return sum + Math.max(0, sub - disc + ship);
+        }, 0);
         return {
           id: u.id,
           name: u.name || 'Anonymous Customer',
@@ -5527,7 +5536,7 @@ app.use((err: any, req: any, res: any, next: any) => {
           is_active: u.is_active !== false,
           created_at: u.created_at || '2024-01-15T10:00:00Z',
           orders_count: uOrders.length,
-          total_spent: uOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0)
+          total_spent: spent
         };
       }));
     } catch (err: any) {
@@ -5582,11 +5591,12 @@ app.use((err: any, req: any, res: any, next: any) => {
     if (sql) {
       try {
         const rows = showAll
-          ? await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 60`
-          : await sql`SELECT * FROM notifications WHERE is_read = false ORDER BY created_at DESC LIMIT 60`;
-        if (rows && rows.length > 0) {
+          ? await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100`
+          : await sql`SELECT * FROM notifications WHERE is_read = false ORDER BY created_at DESC LIMIT 100`;
+        if (rows) {
           return res.json(rows.map((r: any) => ({
-            id: r.id,
+            id: String(r.id),
+            user_id: r.user_id,
             title: r.title,
             message: r.message,
             type: r.type || 'system',
@@ -5594,9 +5604,6 @@ app.use((err: any, req: any, res: any, next: any) => {
             created_at: r.created_at,
             link: r.link
           })));
-        } else if (!showAll) {
-          // If no unread rows in DB, return empty array
-          return res.json([]);
         }
       } catch (e) {
         console.error('Neon notifications fetch error:', e);
@@ -5659,7 +5666,7 @@ app.use((err: any, req: any, res: any, next: any) => {
           RETURNING id, created_at
         `;
         if (rows && rows.length > 0) {
-          notifId = rows[0].id;
+          notifId = String(rows[0].id);
         }
       } catch (e: any) {
         console.error('Neon notification insert error:', e.message);
@@ -5694,7 +5701,7 @@ app.use((err: any, req: any, res: any, next: any) => {
     if (id === 'all') {
       adminNotificationsStore = adminNotificationsStore.map(n => ({ ...n, is_read: true }));
     } else {
-      adminNotificationsStore = adminNotificationsStore.map(n => n.id === id ? { ...n, is_read: true } : n);
+      adminNotificationsStore = adminNotificationsStore.map(n => String(n.id) === String(id) ? { ...n, is_read: true } : n);
     }
     res.json({ success: true });
   });
@@ -5715,7 +5722,7 @@ app.use((err: any, req: any, res: any, next: any) => {
     if (id === 'all') {
       adminNotificationsStore = [];
     } else {
-      adminNotificationsStore = adminNotificationsStore.filter(n => n.id !== id);
+      adminNotificationsStore = adminNotificationsStore.filter(n => String(n.id) !== String(id));
     }
     res.json({ success: true });
   });

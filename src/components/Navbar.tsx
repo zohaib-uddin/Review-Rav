@@ -188,15 +188,17 @@ export default function Navbar() {
             {/* Center - Transparent Logo Image Imported Through Code */}
             <div className="flex-1 flex items-center justify-center px-2 min-h-0">
               <Link to="/" id="navbar-brand-logo" className="flex items-center justify-center p-0 group" ref={logoRef}>
-                <motion.img
-                  id="navbar-brand-logo-img"
-                  src={logoImg}
-                  alt="RAVENZA"
-                  style={{ scale: logoScale }}
-                  className={`h-10 sm:h-12 md:h-[52px] lg:h-[58px] w-auto max-w-[220px] sm:max-w-[270px] md:max-w-[320px] lg:max-w-[360px] object-contain transition-opacity duration-200 group-hover:scale-105 ${
-                    isIntroFlying ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                  }`}
-                />
+               <motion.img
+  id="navbar-brand-logo-img"
+  src={logoImg}
+  alt="RAVENZA"
+  animate={{ scale: [1, 1.03, 1] }} // ✅ Subtle zoom loop
+  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+  style={{ scale: logoScale }} // Scroll based scale still works
+  className={`h-10 sm:h-12 md:h-[52px] lg:h-[58px] w-auto max-w-[220px] sm:max-w-[270px] md:max-w-[320px] lg:max-w-[360px] object-contain transition-opacity duration-200 group-hover:scale-105 ${
+    isIntroFlying ? 'opacity-0 pointer-events-none' : 'opacity-100'
+  }`}
+/>
               </Link>
             </div>
 
@@ -291,11 +293,24 @@ export default function Navbar() {
                     className="text-xs font-bold uppercase tracking-wider text-gray-800 hover:text-black transition-colors flex items-center gap-1.5 py-1"
                   >
                     {category.name}
-                    {category.badge && (
-                      <span className="text-[9px] bg-black text-white px-1.5 py-0.2 rounded font-bold uppercase">
-                        {category.badge}
-                      </span>
-                    )}
+                                    {category.badge && (
+                    <motion.span 
+                      initial={{ opacity: 0.7 }}
+                      animate={{ 
+                        scale: [0.92, 1, 0.92], // ✅ Bohot subtle zoom (sirf 8% change)
+                        opacity: [0.7, 1, 0.7]  // ✅ Halka sa fade (kabhi bhi 0 nahi hoga)
+                      }}
+                      transition={{ 
+                        duration: 3.5,          // ✅ Slow & smooth loop
+                        repeat: Infinity,       
+                        ease: "easeInOut" 
+                      }}
+                      // ✅ Width kam (px-1.5), Text simple (font-medium), Size chota
+                      className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[8px] font-medium uppercase tracking-wide ml-1 mb-[1px] align-middle whitespace-nowrap leading-none"
+                    >
+                      {category.badge}
+                    </motion.span>
+                  )}
                   </Link>
 
                   {/* Mega Menu - Guaranteed to open below category navigation */}
